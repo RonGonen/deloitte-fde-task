@@ -12,9 +12,8 @@ function percentChange(current, previous) {
   return ((current - previous) / previous) * 100;
 }
 
-function rankNewEnglandAirports(airports, metrics, limit = 5) {
+function rankInvestmentCandidates(airports, metrics, limit = 5) {
   const candidates = airports
-    .filter((airport) => NEW_ENGLAND_STATES.has(airport.stateCode))
     .map((airport) => ({ airport, metric: metrics[airport.airportCode] }))
     .filter(({ metric }) => metric && [metric.growthPct, metric.passengerVolume].every(Number.isFinite));
 
@@ -38,6 +37,38 @@ function rankNewEnglandAirports(airports, metrics, limit = 5) {
     })
     .sort((left, right) => right.score - left.score || left.airport.airportCode.localeCompare(right.airport.airportCode))
     .slice(0, limit);
+}
+
+function rankNewEnglandAirports(airports, metrics, limit = 5) {
+  return rankInvestmentCandidates(
+    airports.filter((airport) => NEW_ENGLAND_STATES.has(airport.stateCode)),
+    metrics,
+    limit,
+  );
+}
+
+function filterAirports(airports, { stateCodes = [], minimumPassengers = 0 } = {}) {
+  const states = new Set(stateCodes.map((state) => state.toUpperCase()));
+  return airports.filter((airport) => {
+    if (states.size > 0 && !states.has(airport.stateCode)) return false;
+    if (airport.serviceLevel === "GA") return false;
+    return Number.isFinite(airport.passengerVolume) && airport.passengerVolume >= minimumPassengers;
+  });
+}
+
+function rankAirports(airports, { metric = "passengerVolume", limit = 10 } = {}) {
+  if (!new Set(["passengerVolume", "growthPct"]).has(metric)) {
+    throw new Error(`Unsupported airport ranking metric: ${metric}`);
+  }
+  return airports
+    .filter((airport) => Number.isFinite(airport[metric]))
+    .toSorted((left, right) => right[metric] - left[metric] || left.airportCode.localeCompare(right.airportCode))
+    .slice(0, limit);
+}
+
+function compareAirports(airports, codes) {
+  const byCode = new Map(airports.map((airport) => [airport.airportCode.toUpperCase(), airport]));
+  return codes.map((code) => byCode.get(code.toUpperCase()) ?? null);
 }
 
 function compareCongestion(periods, airportCodes) {
@@ -120,9 +151,13 @@ function demandPressure(metrics) {
 module.exports = {
   LONG_HAUL_THRESHOLD_MILES,
   compareCongestion,
+  compareAirports,
   demandPressure,
+  filterAirports,
   haversineMiles,
   longHaulShare,
   percentChange,
+  rankAirports,
+  rankInvestmentCandidates,
   rankNewEnglandAirports,
 };

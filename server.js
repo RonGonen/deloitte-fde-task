@@ -76,7 +76,11 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 400, { error: "Enter an airport question to continue." });
         return;
       }
-      const answer = await answerQuestion(body.question.trim(), body.previousIntent || null);
+      const history = Array.isArray(body.history)
+        ? body.history.slice(-12).filter((turn) => ["user", "assistant"].includes(turn.role) && typeof turn.content === "string")
+        : [];
+      const context = body.context && typeof body.context === "object" ? body.context : null;
+      const answer = await answerQuestion(body.question.trim(), history, context);
       sendJson(response, 200, answer);
     } catch (error) {
       sendJson(response, error.statusCode || 500, { error: error.message || "The request could not be processed." });

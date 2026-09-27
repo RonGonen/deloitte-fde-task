@@ -3,7 +3,9 @@ const input = document.querySelector("#question-input");
 const conversation = document.querySelector("#conversation");
 const sendButton = document.querySelector(".send-button");
 const welcome = document.querySelector("#welcome-note");
-let previousIntent = null;
+const periodStatus = document.querySelector("#period-status");
+const conversationHistory = [];
+let conversationContext = null;
 
 function addUserMessage(text) {
   const wrapper = document.createElement("div");
@@ -32,14 +34,19 @@ function appendResultsTable(answer, container) {
   table.className = "results-table";
   const header = document.createElement("thead");
   const headerRow = document.createElement("tr");
-  const ranking = answer.intent === "new_england_expansion";
-  const labels = ranking
+  const ranking = ["new_england_expansion", "rank_airports"].includes(answer.intent);
+  const scoredRanking = answer.intent === "new_england_expansion";
+  const labels = scoredRanking
     ? ["AIRPORT", "STATE", "ENPLANEMENTS", "GROWTH", "SCREEN SCORE"]
+    : answer.intent === "rank_airports"
+      ? ["AIRPORT", "STATE", "ENPLANEMENTS", "GROWTH", "SERVICE"]
     : answer.intent === "la_congestion"
       ? ["AIRPORT", "PERIOD", "OPERATIONS", "DELAYED", "DELAY RATE"]
+      : answer.intent === "compare_airports"
+        ? ["AIRPORT", "PERIOD", "ENPLANEMENTS", "CHANGE", "MEASURE"]
       : answer.intent === "anc_long_haul"
         ? ["ROUTE", "DISTANCE", "FLIGHTS"]
-        : ["AIRPORT", "LOAD FACTOR", "DELAY RATE", "CANCEL RATE"];
+        : ["AIRPORT", "STATE", "ENPLANEMENTS", "GROWTH", "SERVICE"];
   for (const label of labels) {
     const cell = document.createElement("th");
     cell.textContent = label;
@@ -50,7 +57,7 @@ function appendResultsTable(answer, container) {
 
   for (const result of answer.results) {
     const row = document.createElement("tr");
-    if (ranking) {
+    if (scoredRanking) {
       appendCell(row, `${result.code}  ${result.airport}`, "result-code");
       appendCell(row, result.state);
       appendCell(row, formatNumber(result.enplanements));
@@ -64,12 +71,30 @@ function appendResultsTable(answer, container) {
       fill.style.width = `${Math.max(0, Math.min(100, result.score))}%`;
       bar.append(fill);
       score.append(bar);
+    } else if (ranking) {
+      appendCell(row, `${result.airportCode}  ${result.airport}`, "result-code");
+      appendCell(row, result.state);
+      appendCell(row, formatNumber(result.enplanements));
+      appendCell(row, `${formatNumber(result.growthPct)}%`);
+      appendCell(row, result.serviceLevel);
     } else if (answer.intent === "la_congestion") {
       appendCell(row, result.airportCode, "result-code");
       appendCell(row, result.period);
       appendCell(row, formatNumber(result.operations));
       appendCell(row, formatNumber(result.delayedOperations));
       appendCell(row, `${formatNumber(result.delayRatePct)}%`);
+    } else if (answer.intent === "compare_airports") {
+      appendCell(row, result.airportCode, "result-code");
+      appendCell(row, `${result.previousYear}–${result.currentYear}`);
+      appendCell(row, formatNumber(result.enplanements));
+      appendCell(row, `${formatNumber(result.growthPct)}%`);
+      appendCell(row, "Passenger boardings");
+    } else if (["airport_profile", "explain_ranking"].includes(answer.intent)) {
+      appendCell(row, result.airportCode, "result-code");
+      appendCell(row, result.state);
+      appendCell(row, formatNumber(result.enplanements));
+      appendCell(row, `${formatNumber(result.growthPct)}%`);
+      appendCell(row, result.serviceLevel);
     } else if (answer.intent === "anc_long_haul") {
       appendCell(row, `${result.origin} → ${result.destination}`, "result-code");
       appendCell(row, `${formatNumber(result.distanceMiles)} mi`);
@@ -141,6 +166,7 @@ function addAnswer(answer) {
 async function ask(question) {
   welcome.hidden = true;
   addUserMessage(question);
+  conversationHistory.push({ role: "user", content: question });
   const typing = document.createElement("div");
   typing.className = "typing";
   typing.textContent = "Checking the evidence…";
@@ -151,12 +177,17 @@ async function ask(question) {
     const response = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, previousIntent }),
+      body: JSON.stringify({ question, history: conversationHistory.slice(-12), context: conversationContext }),
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "The question could not be processed.");
-    previousIntent = payload.intent || previousIntent;
+    conversationContext = payload.context || conversationContext;
     addAnswer(payload);
+    conversationHistory.push({
+      role: "assistant",
+      content: JSON.stringify({ title: payload.title, summary: payload.summary, intent: payload.intent, context: payload.context, results: payload.results?.slice(0, 5) }),
+    });
+    if (payload.period) periodStatus.textContent = payload.period;
   } catch (error) {
     addAnswer({ title: "Analysis unavailable", summary: error.message, results: [], limitation: "The local server could not complete this request." });
   } finally {

@@ -102,15 +102,37 @@ async function loadAirportCoordinates({ forceRefresh = false } = {}) {
 
   const response = await fetchWithTimeout(OUR_AIRPORTS_CSV_URL);
   const records = parse(await response.text(), { columns: true, skip_empty_lines: true, bom: true });
+  const airports = normalizeAirportReference(records);
+  coordinateCache = { loadedAt: Date.now(), airports };
+  return airports;
+}
+
+function normalizeAirportReference(records) {
   const airports = {};
+  const priorityByCode = new Map();
   for (const record of records) {
-    const code = String(record.iata_code ?? "").trim().toUpperCase();
     const latitude = Number(record.latitude_deg);
     const longitude = Number(record.longitude_deg);
-    if (!code || !Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
-    airports[code] = { latitude, longitude, name: record.name, countryCode: record.iso_country };
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+    const airport = {
+      latitude,
+      longitude,
+      name: record.name,
+      countryCode: record.iso_country,
+      regionCode: String(record.iso_region ?? "").split("-").at(-1),
+      facilityType: record.type,
+      scheduledService: String(record.scheduled_service).toLowerCase() === "yes",
+      localCode: String(record.local_code ?? "").trim().toUpperCase(),
+      gpsCode: String(record.gps_code ?? "").trim().toUpperCase(),
+      iataCode: String(record.iata_code ?? "").trim().toUpperCase(),
+    };
+    for (const [code, priority] of [[airport.localCode, 1], [airport.gpsCode, 2], [airport.iataCode, 3]]) {
+      if (code && priority > (priorityByCode.get(code) || 0)) {
+        airports[code] = airport;
+        priorityByCode.set(code, priority);
+      }
+    }
   }
-  coordinateCache = { loadedAt: Date.now(), airports };
   return airports;
 }
 
@@ -119,5 +141,6 @@ module.exports = {
   OUR_AIRPORTS_CSV_URL,
   loadAirportCoordinates,
   loadFaaEnplanements,
+  normalizeAirportReference,
   normalizeEnplanementRows,
 };

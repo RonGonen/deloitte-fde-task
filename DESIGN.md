@@ -2,21 +2,27 @@
 
 ## Product Boundary
 
-This is an exploratory airport-investment screening tool, not a capital-planning model. It answers the four benchmark questions with explicit periods, definitions, provenance, and limitations. The New England passenger-growth shortlist uses live FAA data. Congestion, route frequency, and SFO pressure indicators currently use bundled synthetic data and are labeled `DEMO` in every answer.
+This is a general airport-market exploration tool with an optional investment-screening view, not a capital-planning model. It can rank FAA airports by annual enplanements or growth, filter by state/region, compare airports, and return a basic airport profile. Delay, route-frequency, and demand-pressure examples still use bundled synthetic data and are labeled `DEMO` in every answer.
 
 ## Architecture
 
 ```text
 Browser chat
     -> Node HTTP API (`server.js`)
-        -> intent router (`src/agent.js`)
+            -> query planner + turn context (`src/agent.js`)
             -> deterministic analytics (`src/analytics.js`)
             -> public-data adapters (`src/data-sources.js`)
                 -> FAA enplanement workbook (XLSX)
-                -> OurAirports reference coordinates (CSV)
+                -> OurAirports facility reference and coordinates (CSV)
 ```
 
-The application uses Node's built-in HTTP server and browser APIs. ExcelJS parses FAA workbooks, and `csv-parse` handles OurAirports CSV. The server binds to loopback by default; no user account or write API is needed.
+The application uses Node's built-in HTTP server and browser APIs. ExcelJS parses FAA workbooks, and `csv-parse` handles OurAirports CSV. The browser keeps a bounded recent-turn history and structured result context for follow-ups; nothing is persisted. The server binds to loopback by default; no user account or write API is needed.
+
+## Query Coverage and Data Quality
+
+The live FAA table is the reusable source of truth for rankings, state/region filters, snapshots, and comparisons. Ordinary rankings sort the selected raw metric directly rather than mixing it with a custom score. The optional investment screen is clearly separated. FAA location identifiers are kept distinct from IATA identifiers; OurAirports is used as a cross-reference only when an airport can be matched. The FAA `S/L` service-level field controls GA filtering; the separate hub-size field is not treated as a service class.
+
+The current BTS catalog entries inspected for airport delay/on-time data resolve to chart/measure assets without accessible row-level fields through the public Socrata endpoint. Therefore the app does not label those responses live: operational examples remain synthetic `DEMO` inputs until a stable BTS download/API adapter and matched-period coverage tests are available. FAA's newest period is preliminary, and enplanements mean passenger boardings, not total passenger journeys or capacity.
 
 ## Scoring Methodology
 
@@ -36,11 +42,11 @@ Other deterministic calculations:
 
 ## AI Use
 
-When `OPENAI_API_KEY` is configured, the LLM may map varied user wording and contextual follow-ups to one of four supported intent IDs. It cannot supply metrics, choose score weights, call arbitrary tools, or override the calculation functions. The local rules-based router is the fallback when no key is configured or the model call fails. All arithmetic, filters, rankings, distance calculations, and caveats are handled in deterministic JavaScript and returned as structured results.
+When `OPENAI_API_KEY` is configured, the LLM may map varied wording and recent conversation context into a constrained query plan (ranking, comparison, airport profile, or one of the operational examples). It cannot supply metrics, choose score weights, call arbitrary tools, or override calculations. A rules-based planner supports the common queries and follow-up references when no key is configured or a model call fails. All arithmetic, filters, rankings, distance calculations, and caveats are deterministic JavaScript returned as structured results.
 
 ## Key Tradeoffs and Next Steps
 
 - The FAA XLSX is an official, current, easy-to-audit source for enplanements, but the newest year is preliminary and the dataset does not provide terminal capacity or project costs.
 - Keeping the server dependency-light makes the one-day demo easy to run and explain; a production service would add stronger request validation, observability, persistent cache, and deployment controls.
-- Synthetic operational inputs make all four workflows demonstrable without presenting them as facts. The next data integration should replace these fixtures with matched-period BTS airport on-time and route records, retain dataset vintage, and add coverage tests before removing the `DEMO` badge.
+- Synthetic operational inputs make those concepts explorable without presenting them as facts. The next data integration should find a stable row-level BTS on-time/delay endpoint, retain dataset vintage, and add coverage tests before removing the `DEMO` badge.
 - OurAirports is community-maintained public-domain reference data, so coordinates should be checked against an authoritative source before high-stakes use.

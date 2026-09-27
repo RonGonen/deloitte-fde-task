@@ -2,10 +2,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   compareCongestion,
+  compareAirports,
   demandPressure,
+  filterAirports,
   haversineMiles,
   longHaulShare,
   percentChange,
+  rankAirports,
+  rankInvestmentCandidates,
   rankNewEnglandAirports,
 } = require("../src/analytics");
 
@@ -63,4 +67,20 @@ test("demand pressure is a bounded screening score, not available when inputs ar
   const result = demandPressure({ loadFactorPct: 95, delayRatePct: 20, cancellationRatePct: 5 });
   assert.equal(result.score, 100);
   assert.deepEqual(demandPressure({ loadFactorPct: 90 }).available, false);
+});
+
+test("general airport filters and rankings work across regions and retain nonhub primary airports", () => {
+  const airports = [
+    { airportCode: "BOS", stateCode: "MA", serviceLevel: "P", passengerVolume: 200, growthPct: 4 },
+    { airportCode: "BTV", stateCode: "VT", serviceLevel: "P", passengerVolume: 100, growthPct: 8 },
+    { airportCode: "SFO", stateCode: "CA", serviceLevel: "P", passengerVolume: 300, growthPct: 3 },
+    { airportCode: "XYZ", stateCode: "CA", serviceLevel: "N", passengerVolume: 80, growthPct: 2 },
+    { airportCode: "GA1", stateCode: "CA", serviceLevel: "GA", passengerVolume: 500, growthPct: 20 },
+  ];
+  const california = filterAirports(airports, { stateCodes: ["CA"] });
+  assert.deepEqual(california.map((airport) => airport.airportCode), ["SFO", "XYZ"]);
+  assert.deepEqual(rankAirports(airports, { metric: "growthPct", limit: 2 }).map((airport) => airport.airportCode), ["GA1", "BTV"]);
+  assert.deepEqual(compareAirports(airports, ["BOS", "SFO"]).map((airport) => airport.airportCode), ["BOS", "SFO"]);
+  const screening = rankInvestmentCandidates(airports.slice(0, 3), Object.fromEntries(airports.slice(0, 3).map((airport) => [airport.airportCode, airport])));
+  assert.equal(screening.length, 3);
 });
