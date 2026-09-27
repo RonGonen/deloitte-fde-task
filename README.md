@@ -7,7 +7,7 @@ A compact analyst workspace for screening U.S. airport infrastructure opportunit
 Requires Node.js 20.6 or newer.
 
 ```powershell
-npm ci
+npm install
 npm start
 ```
 
