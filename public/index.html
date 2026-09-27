@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f3f5f2">
+    <title>Airport Investment Intelligence</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Airport Investment Intelligence home">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>FIELDNOTES <b>/ AVIATION</b></span>
+      </a>
+      <div class="topbar-right">
+        <span class="quiet-label">INVESTMENT INTELLIGENCE</span>
+        <span class="status-indicator"><i></i> LOCAL SESSION</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="rail">
+        <div class="rail-heading">
+          <span class="eyebrow">WORKSPACE</span>
+          <h1>Airport<br>opportunity desk</h1>
+          <p>Screen infrastructure signals across the U.S. airport network.</p>
+        </div>
+
+        <section class="source-panel" aria-labelledby="sources-heading">
+          <div class="section-label" id="sources-heading">DATA STATUS</div>
+          <div class="source-line"><span class="source-dot live"></span><span>FAA enplanements</span><b>LIVE</b></div>
+          <div class="source-line"><span class="source-dot demo"></span><span>Operations indicators</span><b>DEMO</b></div>
+          <div class="source-line"><span class="source-dot" id="ai-dot"></span><span>AI interpretation</span><b id="ai-status">RULES</b></div>
+          <p class="source-caption" id="data-status">Checking data-source availability…</p>
+        </section>
+
+        <nav class="prompt-list" aria-label="Benchmark questions">
+          <div class="section-label">START WITH A BRIEF</div>
+          <button class="prompt-button" data-question="Which airports in New England are strong candidates for terminal expansion?"><span>01</span><span>New England<br>expansion shortlist</span><b aria-hidden="true">↗</b></button>
+          <button class="prompt-button" data-question="Compare LA and Santa Ana airport congestion levels."><span>02</span><span>LAX vs. SNA<br>congestion</span><b aria-hidden="true">↗</b></button>
+          <button class="prompt-button" data-question="What percentage of long-haul flights out of Anchorage airport?"><span>03</span><span>ANC long-haul<br>share</span><b aria-hidden="true">↗</b></button>
+          <button class="prompt-button" data-question="What is the unmet flight demand in SFO and why?"><span>04</span><span>SFO demand<br>pressure</span><b aria-hidden="true">↗</b></button>
+        </nav>
+
+        <div class="rail-footer"><span>SCORING MODEL</span><span>v0.1 / EXPLORATORY</span></div>
+      </aside>
+
+      <section class="desk" aria-label="Airport analysis conversation">
+        <div class="desk-header">
+          <div><span class="eyebrow">ANALYST CONSOLE <span class="slash">/</span> UNITED STATES</span><h2>Ask a question</h2></div>
+          <div class="period-chip"><span>REFERENCE PERIOD</span><b id="period-status">FAA FY 2025 preliminary</b></div>
+        </div>
+
+        <div class="conversation" id="conversation" aria-live="polite">
+          <div class="welcome-note" id="welcome-note">
+            <div class="welcome-index">YOUR BRIEF <span>01—04</span></div>
+            <p>Which airport signals deserve a closer look?</p>
+            <span>Choose a benchmark from the left, or ask in your own words.</span>
+          </div>
+        </div>
+
+        <form class="composer" id="question-form">
+          <label class="sr-only" for="question-input">Ask an airport investment question</label>
+          <textarea id="question-input" rows="1" placeholder="Ask about airport demand, congestion, or expansion…" required></textarea>
+          <button class="send-button" type="submit" aria-label="Send question" title="Send question"><span aria-hidden="true">↑</span></button>
+          <div class="composer-meta"><span>ANALYSIS IS RULE-BASED; AI NEVER CALCULATES METRICS</span><span>ENTER TO SEND <kbd>↵</kbd></span></div>
+        </form>
+      </section>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

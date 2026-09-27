@@ -1,0 +1,17 @@
+{
+  "name": "deloitte-fde-task",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Airport Investment Intelligence Agent for the Deloitte FDE home task",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "csv-parse": "^6.1.0",
+    "exceljs": "^4.4.0"
+  }
+}
