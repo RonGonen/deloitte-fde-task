@@ -1,0 +1,11 @@
+{
+  "source": {
+    "name": "FAA Slot Administration",
+    "url": "https://www.faa.gov/about/office_org/headquarters_offices/ato/service_units/systemops/perf_analysis/slot_administration",
+    "page_last_updated": "2026-08-11",
+    "verified_on": "2026-09-27"
+  },
+  "level_3_slot_controlled": ["JFK", "LGA", "DCA"],
+  "level_2_schedule_facilitated": ["ORD", "LAX", "EWR", "SFO"],
+  "note": "Level 3 airports have FAA-limited runway slots; Level 2 airports have a formal FAA schedule review and approval process. Both indicate binding runway/airspace capacity constraints."
+}

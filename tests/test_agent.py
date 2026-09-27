@@ -1,0 +1,210 @@
+"""Agent layer: rules router plans, tool envelopes, grounding check, orchestrator loop with a fake LLM, HTTP API."""
+from __future__ import annotations
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.agent import rules_router
+from app.agent import tools as T
+from app.agent.llm_claude_cli import AssistantTurn, LLMError, build_prompt
+from app.agent.orchestrator import Orchestrator, ground_check
+from app.agent.session import Session, SessionStore
+
+NEW_ENGLAND = ["CT", "ME", "MA", "NH", "RI", "VT"]
+
+
+# ------------------------------------------------------------------ rules router
+@pytest.mark.parametrize("text,tool,check", [
+    ("Which airports in New England are strong candidates for terminal expansion?", "rank_airports", lambda a: a["states"] == NEW_ENGLAND),
+    ("Compare LA and Santa Ana airport congestion levels.", "compare_congestion", lambda a: set(a["codes"]) == {"LAX", "SNA"}),
+    ("What is the percentage of long haul flights out of Anchorage airport?", "long_haul_share", lambda a: a["code"] == "ANC"),
+    ("What is the unmet flight demand in SFO airport and why?", "demand_pressure", lambda a: a["code"] == "SFO"),
+    ("top 5 candidates in Texas with at least 1 million passengers", "rank_airports", lambda a: a["states"] == ["TX"] and a["min_enplanements"] == 1_000_000 and a["limit"] == 5),
+    ("tell me about BOS", "airport_profile", lambda a: a["code"] == "BOS"),
+    ("any ground stops at SFO right now?", "live_airport_status", lambda a: a["codes"] == ["SFO"]),
+    ("how is the expansion score calculated?", "explain_methodology", lambda a: a["topic"] == "expansion_score"),
+    ("Compare BOS and SEA passenger traffic", "rank_airports", lambda a: a["codes"] == ["BOS", "SEA"]),
+])
+def test_plan_routes_canonical_questions(engine, text, tool, check):
+    p = rules_router.plan(engine, Session(id="t"), text)
+    assert p.tool == tool, p
+    assert check(p.arguments), p.arguments
+
+
+def test_roi_and_cargo_questions_are_data_gaps_without_numbers(engine):
+    for text in ("What's the ROI of expanding BOS?", "how much would a new terminal at SFO cost?", "what about cargo at Anchorage?"):
+        out = rules_router.answer(engine, Session(id="t"), text)
+        assert out["intent"] == "data_gap" and out["tool_results"] == []
+        assert "Not available" in out["text"]
+
+
+def test_follow_ups_use_session_context(engine):
+    session = Session(id="t")
+    first = rules_router.answer(engine, session, "Which airports in New England are strong candidates for terminal expansion?")
+    ranked = [x["lid"] for x in first["tool_results"][0]["data"]["ranked"]]
+    second = rules_router.plan(engine, session, "tell me about the second one")
+    assert second.tool == "airport_profile" and second.arguments["code"] == ranked[1]
+    no_scale = rules_router.plan(engine, session, "what if I ignore scale?")
+    assert no_scale.tool == "rank_airports" and no_scale.arguments["weights"]["scale"] == 0.0 and no_scale.arguments["states"] == NEW_ENGLAND
+    rules_router.answer(engine, session, "compare LAX and SNA congestion")
+    added = rules_router.plan(engine, session, "add SFO too")
+    assert added.tool == "compare_congestion" and added.arguments["codes"] == ["LAX", "SNA", "SFO"]
+    rules_router.answer(engine, session, "add SFO too")
+    slots = rules_router.plan(engine, session, "which of these are slot constrained?")
+    assert slots.tool == "compare_congestion" and set(slots.arguments["codes"]) == {"LAX", "SNA", "SFO"}
+
+
+def test_ambiguous_follow_up_asks_for_clarification(engine):
+    out = rules_router.answer(engine, Session(id="t"), "what is the long haul share?")
+    assert out["intent"] == "clarify" and out["tool_results"] == []
+
+
+def test_rules_answers_contain_key_numbers(engine):
+    session = Session(id="t")
+    out = rules_router.answer(engine, session, "What is the unmet flight demand in SFO airport and why?")
+    assert "76." in out["text"] or "Unmet Demand Indicator" in out["text"]
+    assert "Level 2" in out["text"] and "National Airspace System" in out["text"]
+    out = rules_router.answer(engine, session, "What is the percentage of long haul flights out of Anchorage airport?")
+    assert "3,000-mile" in out["text"] and "SEA" in out["text"]
+
+
+# ------------------------------------------------------------------------ tools
+@pytest.mark.parametrize("name,args", [
+    ("resolve_airports", {"query": "Boston and Santa Ana"}),
+    ("rank_airports", {"region": "New England"}),
+    ("airport_profile", {"code": "SFO"}),
+    ("compare_congestion", {"codes": ["LAX", "SNA"]}),
+    ("long_haul_share", {"code": "ANC"}),
+    ("demand_pressure", {"code": "SFO"}),
+    ("live_airport_status", {"codes": ["SFO"]}),
+    ("explain_methodology", {"topic": "unmet_demand"}),
+])
+def test_every_tool_returns_the_envelope(engine, name, args):
+    result = T.dispatch(engine, name, args, Session(id="t"))
+    assert result.get("error") is None, result.get("error")
+    for key in ("tool", "arguments", "data", "sources", "caveats", "confidence", "method"):
+        assert key in result
+    assert result["sources"] and all({"name", "url", "period", "retrieved_at"} <= set(s) for s in result["sources"])
+    assert result["confidence"]["level"] in {"high", "medium", "low"}
+
+
+def test_tool_errors_are_returned_not_raised(engine):
+    assert "Unknown tool" in T.dispatch(engine, "nope", {})["error"]
+    assert "Unknown airport" in T.dispatch(engine, "demand_pressure", {"code": "ZZZZ"})["error"]
+    assert "Unknown region" in T.dispatch(engine, "rank_airports", {"region": "Narnia"})["error"]
+    assert "codes is required" in T.dispatch(engine, "compare_congestion", {})["error"]
+
+
+def test_rank_tool_region_and_session_memory(engine):
+    session = Session(id="t")
+    result = T.dispatch(engine, "rank_airports", {"region": "new england", "limit": 3}, session)
+    assert result["data"]["scope"]["states"] == NEW_ENGLAND and len(result["data"]["ranked"]) == 3
+    assert session.last_result["tool"] == "rank_airports" and session.active_airports == [x["lid"] for x in result["data"]["ranked"]]
+    assert any("percentiles" in c.lower() for c in result["caveats"])
+
+
+def test_tool_specs_are_valid_json_schemas():
+    names = {t["name"] for t in T.TOOL_SPECS}
+    assert names == set(T.HANDLERS)
+    for spec in T.TOOL_SPECS:
+        assert spec["input_schema"]["type"] == "object" and spec["description"]
+
+
+# --------------------------------------------------------------- grounding check
+def test_ground_check_flags_only_numbers_absent_from_tool_results():
+    results = [{"data": {"score": 55.83, "enplanements": 36497303, "pct": 0.197, "year": 2035}, "arguments": {}}]
+    text = "LAX scores 55.8 with 36,497,303 enplanements; 19.7% of arrivals delayed; forecast to 2035. Bogus figure 123.4% and 999 flights."
+    check = ground_check(text, results)
+    assert check["ungrounded"] == ["123.4", "999"]
+    assert check["checked"] == 6  # numbers <= 10 are ignored
+
+
+# ---------------------------------------------------------------- orchestrator
+class FakeLLM:
+    def __init__(self, turns):
+        self.turns = list(turns)
+        self.calls = []
+
+    def complete(self, system, messages, tools, session_context=None):
+        self.calls.append({"messages": messages, "context": session_context})
+        if isinstance(self.turns[0], Exception):
+            raise self.turns.pop(0)
+        return self.turns.pop(0)
+
+
+def test_orchestrator_llm_loop_dispatches_tools_and_grounds_answer(engine):
+    fake = FakeLLM([
+        AssistantTurn(None, [{"name": "compare_congestion", "arguments": {"codes": ["LAX", "SNA"]}}]),
+        AssistantTurn("LAX is more congested than SNA; SFO would be far worse at 99.9% delayed.", []),
+    ])
+    orch = Orchestrator(engine, SessionStore(), llm_factory=lambda provider: fake)
+    response = orch.chat("Compare LA and Santa Ana congestion", provider_override="claude_cli")
+    assert response.mode == "llm" and [t["tool"] for t in response.tool_results] == ["compare_congestion"]
+    assert response.sources and response.caveats
+    assert any("99.9" in w for w in response.warnings)
+    # the tool result was fed back to the model as a tool_result block
+    second_call = fake.calls[1]["messages"]
+    assert second_call[-1]["content"][0]["type"] == "tool_result"
+    assert '"congestion_index"' in second_call[-1]["content"][0]["content"]
+    # session memory carried the airports for follow-ups
+    session = orch.sessions.get_or_create(response.session_id)
+    assert session.active_airports == ["LAX", "SNA"] and len(session.messages) == 2
+
+
+def test_orchestrator_falls_back_to_rules_when_llm_fails(engine):
+    orch = Orchestrator(engine, SessionStore(), llm_factory=lambda provider: FakeLLM([LLMError("boom")]))
+    response = orch.chat("What is the unmet flight demand in SFO airport and why?", provider_override="anthropic")
+    assert response.mode == "rules" and response.tool_results[0]["tool"] == "demand_pressure"
+    assert any("LLM unavailable" in w for w in response.warnings)
+
+
+def test_orchestrator_passes_session_context_to_llm(engine):
+    fake = FakeLLM([AssistantTurn("First answer.", []), AssistantTurn("Second answer.", [])])
+    orch = Orchestrator(engine, SessionStore(), llm_factory=lambda provider: fake)
+    first = orch.chat("Which airports in New England are strong candidates for terminal expansion?", provider_override="rules")
+    orch.chat("and the second one?", first.session_id, provider_override="claude_cli")
+    assert fake.calls[0]["context"] and "rank_airports" in fake.calls[0]["context"]
+    assert fake.calls[0]["messages"][0]["role"] == "user"  # prior turns included as text history
+
+
+def test_cli_prompt_renders_tool_blocks():
+    messages = [{"role": "user", "content": "hi"},
+                {"role": "assistant", "content": [{"type": "tool_use", "id": "c1", "name": "airport_profile", "input": {"code": "SFO"}}]},
+                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "c1", "name": "airport_profile", "content": "{\"x\": 1}"}]}]
+    prompt = build_prompt(messages, T.TOOL_SPECS, "Previous tool: none")
+    assert "airport_profile {\"code\":\"SFO\"}" in prompt and "[tool result for airport_profile]" in prompt and "Conversation state" in prompt
+
+
+# -------------------------------------------------------------------------- API
+@pytest.fixture()
+def client(engine, monkeypatch):
+    from app import main
+    monkeypatch.setitem(main._state, "orchestrator", Orchestrator(engine, SessionStore()))
+    monkeypatch.setitem(main._state, "engine", engine)
+    return TestClient(main.app)
+
+
+def test_api_health_and_methodology(client):
+    health = client.get("/api/health")
+    assert health.status_code == 200 and health.json()["status"] == "ready" and health.json()["universe_size"] > 10
+    method = client.get("/api/methodology")
+    assert method.status_code == 200 and "expansion_score" in method.json()
+    assert client.get("/api/tools").json()["tools"]
+
+
+def test_api_chat_rules_mode_and_validation(client):
+    response = client.post("/api/chat", json={"message": "Compare LAX and SNA congestion", "provider": "rules"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "rules" and body["tool_results"][0]["tool"] == "compare_congestion" and body["session_id"]
+    follow = client.post("/api/chat", json={"message": "add SFO too", "provider": "rules", "session_id": body["session_id"]})
+    assert follow.status_code == 200 and {a["lid"] for a in follow.json()["tool_results"][0]["data"]["airports"]} == {"LAX", "SNA", "SFO"}
+    assert client.post("/api/chat", json={"message": "x" * 2001}).status_code == 422
+    assert client.post("/api/chat", json={"message": "hi", "session_id": "not-a-uuid"}).status_code == 422
+    assert client.post("/api/chat", json={"message": "   "}).status_code == 422
+    assert client.post("/api/chat", json={"message": "hi", "provider": "openai"}).status_code == 422
+
+
+def test_index_is_served(client):
+    response = client.get("/")
+    assert response.status_code == 200 and "<html" in response.text.lower()

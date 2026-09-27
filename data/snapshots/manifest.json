@@ -1,0 +1,33 @@
+{
+  "delay_cause": {
+    "airports": 369,
+    "period": "2025-08 to 2026-07",
+    "retrieved_at": "2026-09-27T15:42:19+00:00",
+    "rows": 4340,
+    "url": "https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp"
+  },
+  "faa_enplanements_fallback": {
+    "latest_year": 2025,
+    "preliminary": true,
+    "retrieved_at": "2026-09-27T15:41:31+00:00",
+    "source_url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2025-all-enplanements-preliminary.xlsx"
+  },
+  "ontime": {
+    "months": [
+      "2026-05",
+      "2026-06",
+      "2026-07"
+    ],
+    "retrieved_at": "2026-09-27T15:55:00+00:00",
+    "route_rows": 18261,
+    "url_pattern": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_{year}_{month}.zip"
+  },
+  "taf": {
+    "edition": "TAF 2025 (final, published 2026)",
+    "last_actual_year": 2024,
+    "last_forecast_year": 2055,
+    "retrieved_at": "2026-09-27T15:41:32+00:00",
+    "rows": 33596,
+    "url": "https://taf.faa.gov/Downloads/APO100_TAF_Final_2025.zip"
+  }
+}

@@ -1,0 +1,36 @@
+ident,type,name,latitude_deg,longitude_deg,state,municipality,scheduled_service,gps_code,iata_code,local_code
+34II,small_airport,Burk Personal Use Airport,40.050816,-85.602318,IN,Anderson,False,34II,,34II
+CLF,small_airport,Tischner Air Airport,64.2545,-149.19207,AK,Anderson,False,,,2AN
+KACK,medium_airport,Nantucket Memorial Airport,41.25310135,-70.06020355,MA,Nantucket,True,KACK,ACK,ACK
+KAID,small_airport,Anderson Municipal Darlington Field,40.10860061649999,-85.6129989624,IN,Anderson,False,KAID,AID,AID
+KAND,medium_airport,Anderson Regional Airport,34.4945983887,-82.70939636230001,SC,Anderson,False,KAND,AND,AND
+KATL,large_airport,Hartsfield Jackson Atlanta International Airport,33.6367,-84.428101,GA,Atlanta,True,KATL,ATL,ATL
+KAUS,large_airport,Austin Bergstrom International Airport,30.197535,-97.662015,TX,Austin,True,KAUS,AUS,AUS
+KBDL,large_airport,Bradley International Airport,41.938555,-72.688016,CT,Hartford,True,KBDL,BDL,BDL
+KBGR,medium_airport,Bangor International Airport,44.806364,-68.826668,ME,Bangor,True,KBGR,BGR,BGR
+KBOS,large_airport,Boston Logan International Airport,42.36197,-71.0079,MA,Boston,True,KBOS,BOS,BOS
+KBTV,medium_airport,Patrick Leahy Burlington International Airport,44.471901,-73.153297,VT,Burlington,True,KBTV,BTV,BTV
+KDAL,large_airport,Dallas Love Field,32.844776,-96.847653,TX,Dallas,True,KDAL,DAL,DAL
+KDEN,large_airport,Denver International Airport,39.860027,-104.673792,CO,Denver,True,KDEN,DEN,DEN
+KDFW,large_airport,Dallas Fort Worth International Airport,32.896801,-97.038002,TX,Dallas-Fort Worth,True,KDFW,DFW,DFW
+KHOU,large_airport,William P. Hobby Airport,29.645336,-95.276812,TX,Houston,True,KHOU,HOU,HOU
+KHVN,medium_airport,Tweed New Haven Airport,41.262869,-72.887694,CT,New Haven,True,KHVN,HVN,HVN
+KIAH,large_airport,George Bush Intercontinental Airport,29.9844,-95.3414,TX,Houston,True,KIAH,IAH,IAH
+KJFK,large_airport,John F. Kennedy International Airport,40.639447,-73.779317,NY,New York,True,KJFK,JFK,JFK
+KLAX,large_airport,Los Angeles International Airport,33.942501,-118.407997,CA,Los Angeles,True,KLAX,LAX,LAX
+KMHT,medium_airport,Manchester-Boston Regional Airport,42.932598,-71.435699,NH,Manchester,True,KMHT,MHT,MHT
+KOAK,large_airport,Oakland San Francisco Bay Airport,37.720085,-122.221184,CA,Oakland,True,KOAK,OAK,OAK
+KORD,large_airport,Chicago O'Hare International Airport,41.9786,-87.9048,IL,Chicago,True,KORD,ORD,ORD
+KPVD,large_airport,Rhode Island T. F. Green International Airport,41.725038,-71.425668,RI,Providence/Warwick,True,KPVD,PVD,PVD
+KPWM,large_airport,Portland International Jetport,43.646198,-70.309303,ME,Portland,True,KPWM,PWM,PWM
+KSAT,large_airport,San Antonio International Airport,29.533701,-98.469803,TX,San Antonio,True,KSAT,SAT,SAT
+KSEA,large_airport,Seattle–Tacoma International Airport,47.447943,-122.310276,WA,Seattle,True,KSEA,SEA,SEA
+KSFO,large_airport,San Francisco International Airport,37.619806,-122.374821,CA,San Francisco,True,KSFO,SFO,SFO
+KSJC,large_airport,Mineta San Jose International Airport,37.362452,-121.929188,CA,San Jose,True,KSJC,SJC,SJC
+KSNA,large_airport,John Wayne Orange County International Airport,33.675063,-117.869281,CA,Santa Ana,True,KSNA,SNA,SNA
+PADG,small_airport,Red Dog Airport,68.032097,-162.899002,AK,Red Dog,False,PADG,RDB,DGG
+PAFA,medium_airport,Fairbanks International Airport,64.815102,-147.856003,AK,Fairbanks,True,PAFA,FAI,FAI
+PAIK,medium_airport,Bob Baker Memorial Airport,66.976128,-160.439014,AK,Kiana,True,PAIK,IAN,IAN
+PAJN,medium_airport,Juneau International Airport,58.354935,-134.574416,AK,Juneau,True,PAJN,JNU,JNU
+PANC,large_airport,Ted Stevens Anchorage International Airport,61.179004,-149.992561,AK,Anchorage,True,PANC,ANC,ANC
+US-0409,small_airport,B and S Farms Airfield,36.6404333,-94.4893472,MO,Anderson,False,MO13,,MO13

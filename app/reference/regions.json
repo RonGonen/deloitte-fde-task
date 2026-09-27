@@ -1,0 +1,51 @@
+{
+  "states": {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado",
+    "CT": "Connecticut", "DE": "Delaware", "DC": "District of Columbia", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii",
+    "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana",
+    "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi",
+    "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+    "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma",
+    "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota",
+    "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
+    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming", "PR": "Puerto Rico", "VI": "U.S. Virgin Islands", "GU": "Guam"
+  },
+  "regions": {
+    "new england": ["CT", "ME", "MA", "NH", "RI", "VT"],
+    "mid-atlantic": ["NJ", "NY", "PA"],
+    "mid atlantic": ["NJ", "NY", "PA"],
+    "northeast": ["CT", "ME", "MA", "NH", "RI", "VT", "NJ", "NY", "PA"],
+    "south atlantic": ["DE", "DC", "FL", "GA", "MD", "NC", "SC", "VA", "WV"],
+    "southeast": ["AL", "FL", "GA", "KY", "MS", "NC", "SC", "TN", "VA", "WV", "AR", "LA"],
+    "midwest": ["IL", "IN", "MI", "OH", "WI", "IA", "KS", "MN", "MO", "NE", "ND", "SD"],
+    "great lakes": ["IL", "IN", "MI", "OH", "WI", "MN"],
+    "south": ["AL", "AR", "DE", "DC", "FL", "GA", "KY", "LA", "MD", "MS", "NC", "OK", "SC", "TN", "TX", "VA", "WV"],
+    "southwest": ["AZ", "NM", "OK", "TX"],
+    "mountain west": ["AZ", "CO", "ID", "MT", "NV", "NM", "UT", "WY"],
+    "rocky mountain": ["CO", "ID", "MT", "UT", "WY"],
+    "west": ["AZ", "CO", "ID", "MT", "NV", "NM", "UT", "WY", "AK", "CA", "HI", "OR", "WA"],
+    "west coast": ["CA", "OR", "WA"],
+    "pacific northwest": ["OR", "WA", "ID"],
+    "pacific": ["AK", "CA", "HI", "OR", "WA"],
+    "gulf coast": ["TX", "LA", "MS", "AL", "FL"],
+    "sun belt": ["AL", "AZ", "CA", "FL", "GA", "LA", "MS", "NM", "NV", "NC", "SC", "TX"],
+    "texas triangle": ["TX"],
+    "tri-state": ["NY", "NJ", "CT"]
+  },
+  "metro_aliases": {
+    "la": ["LAX"], "los angeles": ["LAX"], "l.a.": ["LAX"],
+    "santa ana": ["SNA"], "orange county": ["SNA"], "john wayne": ["SNA"],
+    "anchorage": ["ANC"], "san francisco": ["SFO"], "sf": ["SFO"], "bay area": ["SFO", "OAK", "SJC"],
+    "boston": ["BOS"], "logan": ["BOS"], "providence": ["PVD"], "hartford": ["BDL"], "bradley": ["BDL"],
+    "manchester": ["MHT"], "portland maine": ["PWM"], "burlington": ["BTV"],
+    "new york": ["JFK", "LGA", "EWR"], "nyc": ["JFK", "LGA", "EWR"], "chicago": ["ORD", "MDW"],
+    "washington": ["DCA", "IAD", "BWI"], "dc": ["DCA", "IAD"], "dallas": ["DFW", "DAL"], "houston": ["IAH", "HOU"],
+    "seattle": ["SEA"], "denver": ["DEN"], "atlanta": ["ATL"], "miami": ["MIA", "FLL"], "orlando": ["MCO"],
+    "las vegas": ["LAS"], "phoenix": ["PHX"], "san diego": ["SAN"], "oakland": ["OAK"], "san jose": ["SJC"],
+    "philadelphia": ["PHL"], "detroit": ["DTW"], "minneapolis": ["MSP"], "charlotte": ["CLT"], "newark": ["EWR"],
+    "salt lake": ["SLC"], "austin": ["AUS"], "nashville": ["BNA"], "tampa": ["TPA"], "honolulu": ["HNL"],
+    "portland": ["PDX"], "st. louis": ["STL"], "st louis": ["STL"], "baltimore": ["BWI"], "sacramento": ["SMF"],
+    "kansas city": ["MCI"], "raleigh": ["RDU"], "san antonio": ["SAT"], "new orleans": ["MSY"], "pittsburgh": ["PIT"],
+    "cleveland": ["CLE"], "cincinnati": ["CVG"], "columbus": ["CMH"], "indianapolis": ["IND"], "milwaukee": ["MKE"]
+  }
+}

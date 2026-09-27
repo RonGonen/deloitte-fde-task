@@ -1,52 +1,161 @@
 # Design and Architecture
 
-## Product Boundary
+Airport Investment Intelligence Agent, built for the Deloitte FDE take-home. The firm invests in US airport
+modernization; the agent helps analysts find airports where terminal/capacity expansion is most likely to pay off
+because demand growth and binding capacity coincide.
 
-This is a general airport-market exploration tool with an optional investment-screening view, not a capital-planning model. It can rank FAA airports by annual enplanements or growth, filter by state/region, compare airports, and return a basic airport profile. Delay, route-frequency, and demand-pressure examples still use bundled synthetic data and are labeled `DEMO` in every answer.
+## 1. What the agent does
 
-## Architecture
+It answers questions such as the four in the brief, conversationally, from public data only:
 
-```text
-Browser chat
-    -> Node HTTP API (`server.js`)
-            -> query planner + turn context (`src/agent.js`)
-            -> deterministic analytics (`src/analytics.js`)
-            -> public-data adapters (`src/data-sources.js`)
-                -> FAA enplanement workbook (XLSX)
-                -> OurAirports facility reference and coordinates (CSV)
+| Question | Deterministic tool behind it | Public sources |
+|---|---|---|
+| Which airports in New England are strong candidates for terminal expansion? | `rank_airports` -> Expansion Opportunity Score | FAA enplanements, FAA TAF, BTS delay causes, OurAirports runways, FAA slot list |
+| Compare LA and Santa Ana airport congestion levels | `compare_congestion` -> Congestion Index + raw metrics | BTS delay causes, BTS on-time snapshot, TAF operations, runways, live FAA NAS status |
+| What is the percentage of long haul flights out of Anchorage? | `long_haul_share` | BTS on-time flight records (distance), TAF international share |
+| What is the unmet flight demand in SFO and why? | `demand_pressure` -> Unmet Demand Indicator + reasons | TAF forecast vs demonstrated peak operations, BTS delays, slot status, runways |
+
+Follow-ups ("the second one", "add SFO", "what if I ignore scale?") are resolved against the session's last result.
+
+## 2. Architecture
+
+```
+Browser chat UI (static HTML/JS, Web Speech API for voice in/out)
+   -> FastAPI  POST /api/chat   GET /api/health   GET /api/methodology     (127.0.0.1:8000)
+      -> Orchestrator: Session memory -> LLM adapter (claude_cli | anthropic) or rules router
+           -> tools.dispatch(...)  8 deterministic tools, one result envelope
+               -> kpi/  scoring, congestion, long_haul, demand, normalize   (pure functions on one metrics table)
+                   -> Engine: builds one metrics row per airport from
+                        sources/  FAA enplanements (live), TAF (snapshot), BTS delay cause (live), BTS on-time (snapshot),
+                                  OurAirports (live), FAA NAS status (live), FAA slot list (reference)
 ```
 
-The application uses Node's built-in HTTP server and browser APIs. ExcelJS parses FAA workbooks, and `csv-parse` handles OurAirports CSV. The browser keeps a bounded recent-turn history and structured result context for follow-ups; nothing is persisted. The server binds to loopback by default; no user account or write API is needed.
+Design rules:
 
-## Query Coverage and Data Quality
+- **Numbers come from code, words come from the model.** Every tool returns `{data, sources, caveats, confidence, method}`.
+  The LLM only chooses tools and narrates. The UI renders sources/caveats from the structured payload, not from prose.
+- **Grounding check.** After each LLM answer the orchestrator extracts every number in the text and checks that it appears
+  in a tool result (with rounding/percent tolerance). Untraceable numbers are surfaced as a warning in the UI.
+- **One canonical airport record** keyed by FAA location identifier, joined to IATA/ICAO (OurAirports), TAF and the slot list.
+  Join gaps are recorded and lower confidence instead of being silently dropped.
+- **Degrade, never fabricate.** Each source loads independently; a failed live fetch falls back to a stale cache or a
+  committed snapshot with a note. Missing score components are dropped and weights renormalized; nothing is imputed.
+- **Three LLM adapters, one interface** (`complete(system, messages, tools) -> AssistantTurn`):
+  `claude_cli` (headless Claude Code CLI, uses the machine's logged-in account, structured JSON output),
+  `anthropic` (official SDK, native tool use, when `ANTHROPIC_API_KEY` is set), and `rules` (no LLM). The rules router
+  is also the automatic fallback when an LLM call fails, and it shares the same tools and session memory.
 
-The live FAA table is the reusable source of truth for rankings, state/region filters, snapshots, and comparisons. Ordinary rankings sort the selected raw metric directly rather than mixing it with a custom score. The optional investment screen is clearly separated. FAA location identifiers are kept distinct from IATA identifiers; OurAirports is used as a cross-reference only when an airport can be matched. The FAA `S/L` service-level field controls GA filtering; the separate hub-size field is not treated as a service class.
+## 3. Data sources and vintages
 
-The current BTS catalog entries inspected for airport delay/on-time data resolve to chart/measure assets without accessible row-level fields through the public Socrata endpoint. Therefore the app does not label those responses live: operational examples remain synthetic `DEMO` inputs until a stable BTS download/API adapter and matched-period coverage tests are available. FAA's newest period is preliminary, and enplanements mean passenger boardings, not total passenger journeys or capacity.
+| Source | Content | Refresh |
+|---|---|---|
+| FAA Passenger Boarding data (CY2025 preliminary / CY2024 final workbook) | Enplanements, YoY, service level, hub size for ~1,700 airports | Live, discovered from the FAA page, 24 h cache, committed fallback copy |
+| FAA Terminal Area Forecast 2025 | Actual enplanements and operations 1990-2024 by category; FAA forecast 2025-2055 | `scripts/refresh_data.py` builds `data/snapshots/taf_compact.csv` from the 15 MB FAA zip |
+| BTS Airline On-Time Statistics and Delay Causes | Monthly arrivals, delayed >=15 min, cancellations, delay-cause split, by airport and carrier | Live trailing 12 months (2025-08 to 2026-07 at build time), 24 h cache, committed snapshot fallback |
+| BTS Reporting Carrier On-Time Performance (flight level) | Origin, destination, distance, taxi-out, departure delay | `refresh_data.py` downloads 33 MB monthly files (May-Jul 2026) and writes `routes_by_origin.csv`, `ontime_origin_metrics.csv` |
+| OurAirports (public domain) | IATA/ICAO/FAA codes, coordinates, runways (length, surface, open) | Live, 7-day cache |
+| FAA NAS Status feed | Live ground delay programs, ground stops, closures | Live, 5 min cache; annotation only |
+| FAA Slot Administration page (verified 2026-09-27) | Level 3 slot-controlled: JFK, LGA, DCA; Level 2 schedule-facilitated: ORD, LAX, EWR, SFO | Reference file with source URL and dates |
 
-## Scoring Methodology
+The BTS delay-cause download endpoint takes an obfuscated SQL fragment (a +13 rotation over `[0-9A-Za-z]`, month key
+`year*12+month`); the adapter reproduces the encoding the BTS page itself emits and is unit-tested against it.
 
-For each airport with both years present, FAA supplies annual enplanements and year-over-year change. We filter to primary or commercial-service airports (`P`/`CS`) with at least 100,000 annual enplanements in Connecticut, Maine, Massachusetts, New Hampshire, Rhode Island, and Vermont. The 100,000 threshold is an explicit screening choice to keep very small facilities from dominating on volatile growth rates. Each signal is min-max scaled against eligible airports in that peer set to a 0-100 range; if every airport has the same value, each receives 50 for that dimension.
+## 4. Scoring methodology
 
-```text
-screen score = 0.65 * growth percentile + 0.35 * passenger-volume percentile
-```
+All raw signals are winsorized at the 5th/95th percentile, then converted to **national percentiles (0-100)** across the
+universe of FAA primary and commercial-service airports with at least 100,000 annual enplanements (233 airports in
+CY2025). Region filters are applied *after* scoring so a small peer set (six New England states) does not collapse
+into 0/50/100 ranks. A constant signal maps to 50. A missing component is dropped, weights are renormalized, and
+confidence is lowered; nothing is imputed.
 
-Growth receives the larger weight because expansion screening should reward positive momentum, while volume captures the scale of the existing operation. The score is relative to the selected peer set, not a probability of success. Airports missing either metric are omitted; ties are ordered by FAA location identifier. The result is a shortlist for diligence, not evidence of constrained terminal capacity, unserved demand, or positive project ROI.
+### Expansion Opportunity Score
 
-Other deterministic calculations:
+| Component | Weight | Inputs |
+|---|---|---|
+| Forecast growth | 0.30 | FAA TAF enplanement CAGR 2025-2035 (unconstrained forecast) |
+| Demand momentum | 0.20 | Mean of FAA CY2024-CY2025 YoY percentile and TAF 2023-2024 actual growth percentile |
+| Capacity pressure | 0.30 | Half **structural**: air-carrier + air-taxi operations per qualifying runway (open, paved, >= 5,000 ft), FAA slot status (Level 3 = 100, Level 2 = 50, none = 0), TAF 2035 operations / highest annual operations since 1990. Half **observed** (needs >= 2,000 reporting-carrier arrivals): % arrivals delayed >= 15 min, share of delays attributed to the NAS, cancellation rate |
+| Scale | 0.20 | log10 enplanements (revenue base to monetize an expansion) |
 
-- **LAX/SNA congestion:** delayed operations divided by total operations for the same period. Current displayed inputs are synthetic demonstrations.
-- **ANC long-haul share:** frequency-weighted flights on routes at least 3,000 great-circle miles divided by all listed demonstration flights. Coordinates are fetched from OurAirports when available; route frequencies remain synthetic.
-- **SFO pressure screen:** 55% capped load-factor signal + 30% capped delay-rate signal + 15% capped cancellation-rate signal. Caps are 95%, 20%, and 5% respectively. This is an indicator score, never a count of unmet travelers.
+The tool also returns a **no-scale sensitivity score**, sub-scores, the top drivers (component percentile x weight),
+raw metrics, missing components and a confidence level per airport. Weights and the volume floor are parameters an
+analyst can change in conversation.
 
-## AI Use
+Why these weights: an expansion pays off when demand is growing (forecast + momentum, 0.50 combined) *and* capacity is
+already binding (0.30); scale (0.20) keeps very small airports with volatile growth from dominating and is disclosed
+explicitly (with the no-scale variant) rather than hidden in a threshold.
 
-When `OPENAI_API_KEY` is configured, the LLM may map varied wording and recent conversation context into a constrained query plan (ranking, comparison, airport profile, or one of the operational examples). It cannot supply metrics, choose score weights, call arbitrary tools, or override calculations. A rules-based planner supports the common queries and follow-up references when no key is configured or a model call fails. All arithmetic, filters, rankings, distance calculations, and caveats are deterministic JavaScript returned as structured results.
+### Congestion Index (comparisons)
 
-## Key Tradeoffs and Next Steps
+0.35 arrivals delayed >= 15 min + 0.20 NAS share of delays + 0.15 cancellation rate + 0.15 average taxi-out minutes
++ 0.15 operations per qualifying runway, each a national percentile. Raw metrics and the national medians are always
+shown next to the index, weather's own share of delays is printed beside the NAS share, and live FAA status is
+attached but never scored.
 
-- The FAA XLSX is an official, current, easy-to-audit source for enplanements, but the newest year is preliminary and the dataset does not provide terminal capacity or project costs.
-- Keeping the server dependency-light makes the one-day demo easy to run and explain; a production service would add stronger request validation, observability, persistent cache, and deployment controls.
-- Synthetic operational inputs make those concepts explorable without presenting them as facts. The next data integration should find a stable row-level BTS on-time/delay endpoint, retain dataset vintage, and add coverage tests before removing the `DEMO` badge.
-- OurAirports is community-maintained public-domain reference data, so coordinates should be checked against an authoritative source before high-stakes use.
+### Long-haul share
+
+Departures on routes >= 3,000 statute miles / all scheduled departures in the snapshot months (departure-count
+weighted); 1,500 and 2,500 mile shares are shown for sensitivity, with the top and longest routes. The tool states that
+the BTS rows cover domestic flights of reporting carriers only (no international, no all-cargo), which materially
+understates Anchorage, and complements them with the TAF international enplanement share and operations count.
+
+### Unmet Demand Indicator
+
+Mean of six national percentiles: TAF 2035 operations vs demonstrated peak annual operations; % arrivals delayed;
+NAS share of delays; slot status; inverse recovery ratio vs 2019; growth in passengers per operation since 2019
+(up-gauging is how airlines grow where they cannot add flights). Each driver is rendered as a plain-language reason
+with the airport's value against the national median. The tool says explicitly that seats and load factors are not
+available, so unserved passengers cannot be counted: this is a pressure indicator, not a passenger gap.
+
+## 5. Where and how AI is used
+
+- **Interpretation and narration only.** Claude (default `claude-fable-5-1`, configurable) reads the analyst's question
+  and the conversation state, decides which tools to call and with which parameters (states, codes, weights, floors),
+  and writes the answer in a fixed shape: direct answer, evidence with periods and sources, reasoning, assumptions and
+  uncertainty, suggested follow-ups. The system prompt forbids numbers that are not in a tool result.
+- **Not used for**: any calculation, weighting, ranking, forecasting, or data retrieval. The model cannot change
+  weights except by calling `rank_airports` with explicit parameters, which the tool records in the response.
+- **Safety net**: the grounding check flags untraceable numbers; the rules router answers when the LLM is unavailable;
+  every response carries a `mode` badge (LLM vs rules) so the analyst knows which path produced it.
+- **Two ways to run Claude**: through the local Claude Code CLI login (no API key file on disk) or the Anthropic API
+  with `ANTHROPIC_API_KEY` from `.env` (git-ignored). Evaluators without either get the rules-based path.
+
+## 6. Key tradeoffs
+
+- **Snapshots vs live pulls.** Small, fast sources (FAA workbook, BTS delay causes, OurAirports, NAS status) are fetched
+  live with disk caching; the two large or slow sources (15 MB TAF zip, 33 MB/month BTS flight files served at ~60 KB/s)
+  are turned into compact committed snapshots by `scripts/refresh_data.py`. This keeps `npm install`-style setup at
+  under a minute and makes results reproducible, at the cost of route data being three months old.
+- **T-100 is missing.** BTS T-100 segment data (seats, load factors, international and cargo routes) would be the best
+  evidence for unmet demand and long-haul share, but its TranStats download is an ASP.NET postback that could not be
+  scripted reliably in the time available. The methodology says so wherever it matters.
+- **National percentiles over regional peer sets.** Regional peer sets are more intuitive but degenerate for small
+  regions; national normalization is stable and the region filter is stated in every answer.
+- **Weather inside delay statistics.** BTS NAS-attributed delays include weather flow restrictions. Splitting structural
+  from observed pressure, printing the weather share, and using slot status and operations-per-runway keeps a
+  bad-weather airport from being mistaken for a capacity-constrained one.
+- **Claude Fable 5.1 by default.** Best interpretation quality for a demo; each turn takes 20-40 s and roughly $0.30-0.60
+  through the CLI. `LLM_MODEL=claude-sonnet-5` is a faster, cheaper alternative.
+- **In-memory sessions, loopback binding, no auth.** This is a single-analyst local tool; a shared deployment would need
+  authentication, persistent sessions, request logging and rate limits.
+
+## 7. Assumptions, uncertainty and scope
+
+- Enplanements are FAA passenger boardings, not total passengers; CY2025 is preliminary.
+- TAF forecasts are the FAA's unconstrained demand forecasts; TAF actuals end in 2024.
+- BTS delay metrics cover domestic flights of carriers above the DOT reporting threshold, arrivals-based, trailing 12
+  months, and include weather.
+- "Demonstrated peak operations" is historical throughput, not engineered capacity; runway counts are an airfield proxy,
+  not terminal or gate capacity.
+- Scores are relative screening percentiles for diligence, not probabilities or returns. Out of scope: project costs,
+  ROI, financing, gate/terminal design capacity, seats and load factors, cargo tonnage, fares, catchment demographics,
+  airline schedule plans, non-US airports.
+
+## 8. Testing
+
+`pytest` runs 88 offline tests on real-data fixture slices: source parsers (including the BTS URL cipher), the airport
+registry and its text-resolution collisions (`AND`, `SEA` vs Washington, "LA", "Washington state"), normalization,
+each KPI (determinism, weights, sensitivity, missing data), the rules router and follow-ups, tool envelopes, the
+grounding check, the orchestrator with a fake LLM (tool loop and fallback), and the HTTP API including input
+validation. Network-dependent checks are opt-in (`-m network`). `scripts/client_run.py` replays an investor's session
+against the running server and writes the transcript used for `docs/CLIENT_RUN_REPORT.md`.

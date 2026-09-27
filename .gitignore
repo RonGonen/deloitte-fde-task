@@ -1,4 +1,15 @@
-node_modules/
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Local state
 .env
 .cache/
+.DS_Store
+
+# Legacy
+node_modules/
 npm-debug.log*

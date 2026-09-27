@@ -1,0 +1,13 @@
+[project]
+name = "airport-investment-agent"
+version = "0.1.0"
+description = "Airport Investment Intelligence Agent - Deloitte FDE take-home"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "network: tests that hit live public data sources (deselected by default; run with -m network)",
+  "llm: tests that call a real LLM provider",
+]
+addopts = "-m 'not network and not llm'"

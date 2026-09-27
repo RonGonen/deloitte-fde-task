@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Airport Investment Intelligence Agent</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">✈</span>
+      <div>
+        <h1>Airport Investment Intelligence Agent</h1>
+        <p class="tagline">Deterministic FAA/BTS analytics with a conversational analyst layer</p>
+      </div>
+    </div>
+    <div class="status" id="status" aria-live="polite">
+      <span class="pill pill-muted" id="provider-pill">connecting…</span>
+      <span class="pill pill-muted" id="data-pill"></span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat" aria-label="Conversation">
+      <div id="messages" class="messages" role="log" aria-live="polite"></div>
+      <div class="chips" id="chips" aria-label="Suggested questions">
+        <button class="chip" data-q="Which airports in New England are strong candidates for terminal expansion?">New England expansion candidates</button>
+        <button class="chip" data-q="Compare LA and Santa Ana airport congestion levels.">LA vs Santa Ana congestion</button>
+        <button class="chip" data-q="What is the percentage of long haul flights out of Anchorage airport?">Anchorage long-haul share</button>
+        <button class="chip" data-q="What is the unmet flight demand in SFO airport and why?">Unmet demand at SFO</button>
+        <button class="chip" data-q="Top 5 expansion candidates in Texas with at least 1 million passengers">Texas top 5</button>
+        <button class="chip" data-q="How is the expansion score calculated?">Methodology</button>
+      </div>
+      <form id="composer" class="composer" autocomplete="off">
+        <textarea id="input" rows="2" maxlength="2000" placeholder="Ask about airports, congestion, demand, or investment candidates…" aria-label="Your question"></textarea>
+        <div class="composer-actions">
+          <button type="button" id="mic" class="icon-btn" title="Speak your question (voice input)" aria-label="Voice input">🎤</button>
+          <button type="button" id="speak" class="icon-btn" title="Read answers aloud" aria-pressed="false" aria-label="Read answers aloud">🔈</button>
+          <button type="submit" id="send" class="send-btn">Send</button>
+        </div>
+      </form>
+      <p class="footnote">Every number comes from a named public source (FAA, BTS, OurAirports). Scores are screening percentiles, not investment advice. Open <em>Sources &amp; caveats</em> under each answer.</p>
+    </section>
+  </main>
+
+  <template id="msg-template">
+    <article class="msg">
+      <div class="msg-meta"><span class="who"></span><span class="badges"></span></div>
+      <div class="msg-body"></div>
+      <details class="panel sources-panel"><summary>Sources &amp; caveats</summary><div class="panel-body"></div></details>
+      <details class="panel data-panel"><summary>Data returned by the analysis tools</summary><pre class="data-json"></pre></details>
+    </article>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
