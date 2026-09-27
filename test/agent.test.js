@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { answerQuestion, extractPassengerFloor, extractStateCodes, isExpansionCandidate, parseAirportQuery } = require("../src/agent");
+const { answerQuestion, extractPassengerFloor, extractStateCodes, isExpansionCandidate, parseAirportQuery, runAiConversation } = require("../src/agent");
 
 const AIRPORTS = [
   { airportCode: "BOS", stateCode: "MA", city: "Boston", name: "Boston Logan International" },
@@ -74,4 +74,46 @@ test("investor returns and capacity requests are explicit data gaps, not airport
   assert.equal(answer.intent, "investment_data_gap");
   assert.match(answer.limitation, /decision-grade case needs airport financials/);
   assert.equal(answer.results.length, 0);
+});
+
+test("AI tool loop uses previous turns, executes a source tool, and writes a natural follow-up", async () => {
+  const requests = [];
+  const answer = await runAiConversation(
+    "What is the timeframe of the data?",
+    [
+      { role: "user", content: "Rank passenger markets." },
+      { role: "assistant", content: "ATL leads on preliminary 2025 enplanements." },
+    ],
+    { kind: "rank_airports", airportCodes: ["ATL", "DFW"] },
+    {
+      sourceContext: "FAA calendar 2024-2025",
+      modelRequest: async (messages) => {
+        requests.push(messages);
+        if (requests.length === 1) {
+          return { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "call-timeframe", type: "function", function: { name: "get_data_timeframe", arguments: "{}" } }] } }] };
+        }
+        return { choices: [{ message: { role: "assistant", content: "The figures we just discussed compare calendar 2024 with preliminary calendar 2025." } }] };
+      },
+      toolExecutor: async (name) => {
+        assert.equal(name, "get_data_timeframe");
+        return { intent: "data_timeframe", period: "2024 to 2025 (preliminary)", source: { mode: "LIVE" }, summary: "FAA timeframe." };
+      },
+    },
+  );
+
+  assert.match(requests[0].map((message) => message.content || "").join(" "), /ATL leads on preliminary 2025/);
+  assert.ok(requests[1].some((message) => message.role === "tool" && message.tool_call_id === "call-timeframe"));
+  assert.match(answer.summary, /figures we just discussed/);
+  assert.equal(answer.period, "2024 to 2025 (preliminary)");
+  assert.equal(answer.assistantMode, "AI");
+});
+
+test("rules-only fallback answers a timeframe follow-up from the live dataset", async () => {
+  const answer = await answerQuestion("What is the timeframe of the data?", [
+    { role: "user", content: "Rank passenger markets." },
+    { role: "assistant", content: "Here are the top airports." },
+  ], { kind: "rank_airports", airportCodes: ["ATL", "DFW"] });
+  assert.equal(answer.intent, "data_timeframe");
+  assert.match(answer.summary, /calendar year 2024 with calendar year 2025/);
+  assert.equal(answer.assistantMode, "RULES_ONLY");
 });

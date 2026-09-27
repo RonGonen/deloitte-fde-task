@@ -11,9 +11,9 @@ npm install
 npm start
 ```
 
-Open `http://127.0.0.1:3000`. Airport rankings, state/region filters, comparisons, and airport snapshots use the FAA's latest annual enplanement workbook, cached for one hour. Airport snapshots can be enriched with OurAirports facility metadata and coordinates. No API key is required for supported questions.
+Open `http://127.0.0.1:3000`. The server reads `.env` on startup. Airport rankings, state/region filters, comparisons, airport snapshots, and timeframe answers use the FAA's latest annual enplanement workbook, cached for one hour. Airport snapshots can be enriched with OurAirports facility metadata and coordinates.
 
-To enable optional LLM-based intent interpretation, copy `.env.example` to `.env` and set `OPENAI_API_KEY`. The model only maps language to a supported question type; all calculations remain deterministic. Keep `.env` local and do not commit it.
+To enable the AI-driven chat assistant, copy `.env.example` to `.env`, set `OPENAI_API_KEY`, and restart the server. `OPENAI_MODEL` selects the model; `OPENAI_BASE_URL` can point to an OpenAI-compatible provider. Never paste the key into chat or commit `.env`. Without a key the app explicitly reports rules-only mode; it can answer built-in airport screens and the timeframe follow-up, but it is not full AI chat.
 
 ## What It Can Answer
 
@@ -22,7 +22,7 @@ To enable optional LLM-based intent interpretation, copy `.env.example` to `.env
 - Explore expansion screening with the documented relative growth/scale score.
 - Try operational examples for delays, long-haul routes, and demand pressure. Those calculations currently use illustrative inputs and are labeled `DEMO`; they are not observations.
 
-The conversation supports follow-ups such as “sort those by growth,” “what about the second one?”, and “compare BOS too.” Recent turn text and a small structured result context are held in the browser session and sent to the local API; they are not persisted to a database.
+With AI configured, the agent reads recent conversation turns, calls the FAA/airport data tools when it needs evidence, then writes a natural-language response. This allows follow-ups such as “What timeframe is that?”, “sort those by growth,” and “what about the second one?” without hardcoded answer templates. Recent turn text and structured result context remain in the browser session and are sent to the local API; they are not persisted to a database. The model cannot invent capacity, project cost, or ROI data that the tools do not provide. A mocked-provider test covers the tool-call and follow-up loop; live provider behavior requires your local key.
 
 ## Checks
 

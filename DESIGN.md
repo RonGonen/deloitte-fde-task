@@ -42,7 +42,7 @@ Other deterministic calculations:
 
 ## AI Use
 
-When `OPENAI_API_KEY` is configured, the LLM may map varied wording and recent conversation context into a constrained query plan (ranking, comparison, airport profile, or one of the operational examples). It cannot supply metrics, choose score weights, call arbitrary tools, or override calculations. A rules-based planner supports the common queries and follow-up references when no key is configured or a model call fails. All arithmetic, filters, rankings, distance calculations, and caveats are deterministic JavaScript returned as structured results.
+When `OPENAI_API_KEY` is configured, the LLM is the conversational agent: it reads recent turns, chooses among explicit airport-data tools, receives their structured results, and generates a natural-language reply. Tools cover airport search/ranking, comparison, airport snapshots, dataset timeframe, investment-data gaps, and explicitly synthetic operations examples. The model does not generate metric values itself, choose score weights, call arbitrary code, or override tool results. Ranking, filtering, joins, distance calculations, and source caveats remain deterministic JavaScript. `OPENAI_BASE_URL` allows an OpenAI-compatible endpoint. Without a key, the app reports rules-only mode and uses the deterministic fallback for its supported query types; it must not present that mode as AI chat. The tool loop and contextual follow-ups are covered by mocked-provider tests; live provider authentication and response quality require a local key.
 
 ## Key Tradeoffs and Next Steps
 

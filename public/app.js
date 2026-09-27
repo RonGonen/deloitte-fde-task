@@ -125,6 +125,12 @@ function addAnswer(answer) {
     mode.textContent = answer.source.mode;
     head.append(mode);
   }
+  if (answer.assistantMode) {
+    const assistantMode = document.createElement("span");
+    assistantMode.className = `mode-pill assistant-mode ${answer.assistantMode.toLowerCase().replaceAll("_", "-")}`;
+    assistantMode.textContent = answer.assistantMode === "AI" ? "AI ASSISTANT" : answer.assistantMode === "AI_ERROR" ? "AI ERROR" : "RULES ONLY";
+    head.append(assistantMode);
+  }
   wrapper.append(head);
 
   if (answer.period) {
@@ -177,7 +183,7 @@ async function ask(question) {
     const response = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history: conversationHistory.slice(-12), context: conversationContext }),
+      body: JSON.stringify({ question, history: conversationHistory.slice(0, -1).slice(-12), context: conversationContext }),
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "The question could not be processed.");
@@ -197,40 +203,4 @@ async function ask(question) {
   }
 }
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const question = input.value.trim();
-  if (!question) return;
-  input.value = "";
-  input.style.height = "auto";
-  ask(question);
-});
-
-input.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    form.requestSubmit();
-  }
-});
-
-input.addEventListener("input", () => {
-  input.style.height = "auto";
-  input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
-});
-
-document.querySelectorAll(".prompt-button").forEach((button) => {
-  button.addEventListener("click", () => ask(button.dataset.question));
-});
-
-fetch("/api/status")
-  .then((response) => response.json())
-  .then((status) => {
-    document.querySelector("#data-status").textContent = "FAA traffic is fetched on query; three operational examples are illustrative.";
-    if (status.llmEnabled) {
-      document.querySelector("#ai-status").textContent = "OPTIONAL LLM";
-      document.querySelector("#ai-dot").classList.add("live");
-    }
-  })
-  .catch(() => {
-    document.querySelector("#data-status").textContent = "Status check unavailable; live FAA data is fetched when queried.";
-  });
+document.querySelector("#s

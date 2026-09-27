@@ -9,7 +9,7 @@ I am an analyst at a U.S. airport-modernization investment firm. I use the tool 
 - Run `npm install` and `npm start`, then open `http://127.0.0.1:3000`.
 - Run the repeatable API checks with `node scripts/customer-acceptance.js`.
 - The live FAA test period in this run was calendar 2024 to 2025; the 2025 FAA workbook was preliminary.
-- LLM mode was not configured. These scenarios test the rules-based planner, real data adapters, and browser-style history/context payload.
+- The AI tool-calling loop is covered by a mocked-provider unit test; a live provider call was not possible because this environment has no API key.
 - The operational example is expected to say `DEMO`. It is not accepted as evidence about current airport operations.
 
 ## Acceptance Scenarios
@@ -25,8 +25,9 @@ I am an analyst at a U.S. airport-modernization investment firm. I use the tool 
 | INV-07 | Inspect LAX | FAA traffic plus facility type, scheduled-service flag, and coordinates | PASS |
 | INV-08 | Ask for BOS project ROI | No invented return; explicit statement that financial/project/capacity inputs are missing | PASS |
 | INV-09 | Compare LAX and SNA congestion | Response is visibly `DEMO` and says values are synthetic | PASS |
+| INV-10 | Ask “What is the timeframe of the data?” after earlier results | Answers 2024–2025, preliminary status, and FAA boarding definition | PASS in rules fallback; AI tool-loop behavior covered by mocked-provider test |
 
-All nine API scenarios passed. The browser was also checked at 390px width; the document had no horizontal overflow. Unit tests: 15 passed, 0 failed.
+All ten API scenarios passed. The browser was also checked at 390px width; the document had no horizontal overflow. Unit tests: 17 passed, 0 failed.
 
 ## What Worked
 
@@ -36,6 +37,7 @@ All nine API scenarios passed. The browser was also checked at 390px width; the 
 - Airport identifiers are joined to facility reference data with IATA-over-GPS/local collision precedence. LAX, SFO, and BOS were verified as large scheduled-service airports.
 - Unsupported ROI and terminal-capacity questions do not return an unrelated airport profile as though it answered the question.
 - Calculations remain deterministic in rules-only mode. The optional LLM is not required to execute the tested workflows.
+- The configured AI path passes a mocked integration test: it includes the prior user/assistant turn, calls the timeframe data tool, and composes a natural follow-up answer.
 
 ## Missing
 
@@ -44,7 +46,7 @@ All nine API scenarios passed. The browser was also checked at 390px width; the 
 - **Forecast and demand:** no catchment population, origin-destination demand forecast, airline schedule/frequency trend, fares, leakage to competing airports, or unserved booking/search data.
 - **Live operations:** BTS delay/on-time measures, cancellations, and route-frequency measures are still synthetic `DEMO` examples. The public BTS catalog entries found in this pass did not expose dependable row-level airport data through the queried Socrata surfaces.
 - **Investment context:** no project pipeline, sponsor/ownership constraints, environmental/community constraints, permitting timeline, or comparable project outcomes.
-- **LLM mode:** no configured key was available in this acceptance environment, so broader semantic interpretation is not part of the pass criteria; common intents and tested follow-ups work with rules.
+- **Live LLM execution:** no configured key was available in this acceptance environment, so external provider authentication, latency, and model behavior remain unverified. The browser correctly indicates setup is required; mocked tool-loop behavior is tested.
 
 ## Changes Made During Testing
 

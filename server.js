@@ -63,6 +63,7 @@ const server = http.createServer(async (request, response) => {
     sendJson(response, 200, {
       status: "ready",
       llmEnabled: Boolean(process.env.OPENAI_API_KEY),
+      assistantMode: process.env.OPENAI_API_KEY ? "AI" : "RULES_ONLY",
       liveSources: ["FAA annual airport enplanements", "OurAirports coordinate reference"],
       demoSections: ["airport congestion", "route frequency", "SFO pressure inputs"],
     });

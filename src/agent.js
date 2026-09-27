@@ -94,6 +94,10 @@ function parseAirportQuery(question, airports, context = {}, history = []) {
     ? "growthPct"
     : "passengerVolume";
 
+  if (/\b(time ?frame|date range|data period|which years|what years|how recent|when was .*data|source date)\b/.test(text)) {
+    return { kind: "data_timeframe", metric, stateCodes, airportCodes: context.airportCodes || [] };
+  }
+
   if (context.kind === "rank_airports" && /\b(why|how did|explain|what drove)\b/.test(text)) {
     return { kind: "explain_ranking", metric: context.metric, stateCodes: context.stateCodes || [], airportCodes: context.airportCodes || [], limit: context.limit || 5, expansion: context.expansion || false };
   }
@@ -177,245 +181,165 @@ function parseAirportQuery(question, airports, context = {}, history = []) {
   return { kind: "clarify", metric, stateCodes, airportCodes: [] };
 }
 
-async function classifyWithModel(question, history, context, airports) {
-  if (!process.env.OPENAI_API_KEY) return null;
-  try {
-    const recentTurns = history.slice(-8).map(({ role, content }) => ({ role, content: String(content).slice(0, 1000) }));
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: `Plan one airport query using only these fields: kind (rank_airports, compare_airports, airport_profile, anc_long_haul, la_congestion, sfo_unmet_demand, clarify), metric (passengerVolume or growthPct), stateCodes, airportCodes, limit, expansion. Supported airport identifiers include: ${airports.slice(0, 200).map((airport) => `${airport.airportCode}:${airport.city}`).join("; ")}. Use prior messages to resolve references such as "those", "the second one", or "what about it". Do not invent identifiers or numbers. Existing context: ${JSON.stringify(context || {})}. Return JSON only.` },
-          ...recentTurns,
-          { role: "user", content: question },
-        ],
-      }),
-      signal: AbortSignal.timeout(7000),
-    });
-    if (!response.ok) return null;
-    const payload = await response.json();
-    const plan = JSON.parse(payload.choices?.[0]?.message?.content ?? "{}");
-    const validKinds = new Set(["rank_airports", "compare_airports", "airport_profile", "anc_long_haul", "la_congestion", "sfo_unmet_demand", "clarify"]);
-    return validKinds.has(plan.kind) ? { ...plan, stateCodes: Array.isArray(plan.stateCodes) ? plan.stateCodes : [], airportCodes: Array.isArray(plan.airportCodes) ? plan.airportCodes : [] } : null;
-  } catch {
-    return null;
+const AI_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "search_airports",
+      description: "Search, filter, and rank airports using the latest FAA annual enplanements and year-over-year growth. Use for rankings and market screens.",
+      parameters: {
+        type: "object",
+        properties: {
+          states: { type: "array", items: { type: "string" }, description: "Two-letter state codes to include; empty means all reported states." },
+          region: { type: "string", description: "A named U.S. region such as New England, Northeast, Midwest, Southeast, Southwest, or West Coast." },
+          metric: { type: "string", enum: ["enplanements", "growth"], description: "The raw metric to sort by." },
+          limit: { type: "integer", minimum: 1, maximum: 25 },
+          minimum_enplanements: { type: "integer", minimum: 0, description: "Optional minimum annual passenger boardings to avoid small-base growth comparisons." },
+          investment_screen: { type: "boolean", description: "Use the explicit exploratory growth/scale screening score, not a financial valuation." },
+        },
+        required: ["metric"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "compare_airports",
+      description: "Compare airports using the same annual FAA enplanement source and period.",
+      parameters: { type: "object", properties: { airport_codes: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 10 } }, required: ["airport_codes"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "airport_profile",
+      description: "Retrieve FAA annual enplanements and matched public facility/coordinate reference for one or more airports.",
+      parameters: { type: "object", properties: { airport_codes: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 5 } }, required: ["airport_codes"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_data_timeframe",
+      description: "Return the currently loaded FAA dataset years, publication status, retrieval date, source URL, and enplanement definition. Use to answer timeframe/source/freshness follow-ups.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_investment_data_gaps",
+      description: "Explain which project economics, capacity, or unmet-demand evidence is unavailable; never fabricate ROI or terminal capacity.",
+      parameters: { type: "object", properties: { airport_codes: { type: "array", items: { type: "string" } }, question: { type: "string" } }, required: ["question"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_operational_example",
+      description: "Return one of the illustrative operational examples. These inputs are synthetic and must always be described as DEMO, not observed data.",
+      parameters: { type: "object", properties: { topic: { type: "string", enum: ["congestion", "long_haul", "demand_pressure"] } }, required: ["topic"], additionalProperties: false },
+    },
+  },
+];
+
+function getDataTimeframe(report) {
+  return {
+    intent: "data_timeframe",
+    title: "FAA dataset timeframe",
+    period: `${report.previousYear} to ${report.latestYear}${report.preliminary ? " (latest year preliminary)" : ""}`,
+    summary: `The current FAA workbook compares calendar year ${report.previousYear} with calendar year ${report.latestYear}. ${report.latestYear} is ${report.preliminary ? "preliminary" : "final"}. Enplanements are passenger boardings, not total arriving plus departing passengers.`,
+    results: [],
+    source: sourceFor(report),
+    limitation: `Retrieved ${new Date(report.fetchedAt).toLocaleDateString()}. The report's published dataset vintage may differ from today's date.`,
+  };
+}
+
+async function executeAgentTool(name, args = {}) {
+  if (name === "get_data_timeframe") return getDataTimeframe(await loadFaaEnplanements());
+  if (name === "get_investment_data_gaps") {
+    const plan = { airportCodes: Array.isArray(args.airport_codes) ? args.airport_codes.map((code) => String(code).toUpperCase()) : [] };
+    return investmentDataGapAnswer(plan);
   }
-}
+  if (name === "get_operational_example") {
+    const kinds = { congestion: "la_congestion", long_haul: "anc_long_haul", demand_pressure: "sfo_unmet_demand" };
+    return analyzeDemoIntent(kinds[args.topic] || "la_congestion");
+  }
 
-function sourceFor(report) {
-  return {
-    name: "FAA Airport Enplanement Data",
-    url: report.datasetUrl,
-    mode: report.preliminary ? "LIVE · PRELIMINARY" : "LIVE · FINAL",
-    note: `Retrieved ${new Date(report.fetchedAt).toLocaleDateString()}.`,
-  };
-}
-
-function airportResult(airport, reference = null) {
-  return {
-    airportCode: airport.airportCode,
-    airport: airport.name,
-    city: airport.city,
-    state: airport.stateCode,
-    serviceLevel: airport.serviceLevel,
-    enplanements: airport.passengerVolume,
-    growthPct: airport.growthPct,
-    currentYear: airport.latestYear,
-    previousYear: airport.previousYear,
-    facilityType: reference?.facilityType || null,
-    scheduledService: reference?.scheduledService ?? null,
-    latitude: reference?.latitude ?? null,
-    longitude: reference?.longitude ?? null,
-  };
-}
-
-function answerFromFaa(plan, report, airportReference = {}) {
+  const report = await loadFaaEnplanements();
   const airportPool = report.airports.filter((airport) => ["P", "CS"].includes(airport.serviceLevel));
-  const selectedPool = plan.onlyAirportCodes
-    ? airportPool.filter((airport) => plan.airportCodes?.includes(airport.airportCode))
-    : airportPool;
-  const minimumPassengers = Math.max(plan.expansion ? MIN_EXPANSION_ENPLANEMENTS : 0, plan.minimumPassengers || 0);
-  const filtered = filterAirports(selectedPool, { stateCodes: plan.stateCodes || [], minimumPassengers });
+  const referenceCodes = Array.isArray(args.airport_codes) ? args.airport_codes.map((code) => String(code).trim().toUpperCase()) : [];
   const period = `${report.previousYear} to ${report.latestYear}${report.preliminary ? " (latest year preliminary)" : ""}`;
-  const source = sourceFor(report);
 
-  if (plan.kind === "rank_airports") {
-    const ranked = plan.expansion && !plan.onlyAirportCodes
-      ? rankInvestmentCandidates(filtered, Object.fromEntries(filtered.map((airport) => [airport.airportCode, airport])), plan.limit || 5)
-      : rankAirports(filtered, { metric: plan.metric, limit: plan.limit || 5 });
-    const label = plan.expansion
-      ? "the expansion screening score (65% growth, 35% passenger scale)"
-      : plan.metric === "growthPct" ? "year-over-year passenger growth" : "passenger enplanements";
-    const newEnglandCodes = ["CT", "ME", "MA", "NH", "RI", "VT"];
-    const isNewEngland = newEnglandCodes.every((code) => plan.stateCodes?.includes(code)) && plan.stateCodes.length === newEnglandCodes.length;
-    const scope = isNewEngland
-      ? " in New England (CT, ME, MA, NH, RI, and VT)"
-      : plan.stateCodes?.length
-        ? ` in ${plan.stateCodes.join(", ")}`
-        : " across the FAA-reported U.S. airport set";
+  if (name === "search_airports") {
+    const regionCodes = args.region ? extractStateCodes(String(args.region)) : [];
+    const states = Array.isArray(args.states) ? args.states.map((code) => String(code).toUpperCase()) : [];
+    const stateCodes = [...new Set([...states, ...regionCodes])];
+    const expansion = Boolean(args.investment_screen);
+    const floor = Math.max(Number(args.minimum_enplanements) || 0, expansion ? MIN_EXPANSION_ENPLANEMENTS : 0);
+    const filtered = filterAirports(airportPool, { stateCodes, minimumPassengers: floor });
+    const limit = Math.min(25, Math.max(1, Number(args.limit) || 10));
+    const metric = args.metric === "growth" ? "growthPct" : "passengerVolume";
+    const ranked = expansion
+      ? rankInvestmentCandidates(filtered, Object.fromEntries(filtered.map((airport) => [airport.airportCode, airport])), limit)
+      : rankAirports(filtered, { metric, limit });
+    const rows = ranked.map((item) => expansion
+      ? { ...airportResult(item.airport), score: item.score, growthComponent: item.components.growthPct, scaleComponent: item.components.passengerVolume }
+      : airportResult(item));
+    const source = sourceFor(report);
     return {
       intent: "rank_airports",
-      title: plan.expansion ? "Airport expansion screening shortlist" : `Airports ranked by ${label}`,
+      title: expansion ? "Airport expansion screening shortlist" : `Airport ranking by ${metric === "growthPct" ? "passenger growth" : "enplanements"}`,
       period,
-      summary: ranked.length ? `Here are the top ${ranked.length}${scope}, ordered by ${label}${minimumPassengers ? `, with at least ${minimumPassengers.toLocaleString()} annual enplanements` : ""}.` : `No airports with comparable data were found${scope}.`,
-      results: ranked.map((item) => plan.expansion ? {
-        ...airportResult(item.airport),
-        score: item.score,
-        growthComponent: item.components.growthPct,
-        scaleComponent: item.components.passengerVolume,
-      } : airportResult(item)),
+      results: rows,
       source,
-      limitation: plan.expansion
-        ? `This relative screen uses growth (65%) and passenger scale (35%) among primary/commercial airports with at least ${MIN_EXPANSION_ENPLANEMENTS.toLocaleString()} enplanements. It does not establish capacity need, project feasibility, or ROI.`
-        : "Enplanements count passenger boardings, not total arriving plus departing passengers. The newest FAA period may be preliminary; ranking does not imply unmet demand or investment suitability.",
-      context: {
-        kind: "rank_airports",
-        metric: plan.metric,
-        stateCodes: plan.stateCodes || [],
-        limit: plan.limit || 5,
-        expansion: Boolean(plan.expansion),
-        minimumPassengers,
-        airportCodes: ranked.map((item) => item.airport?.airportCode || item.airportCode),
-      },
+      limitation: expansion
+        ? "Exploratory peer-relative screen only: growth (65%) plus passenger scale (35%). It does not establish capacity need, project feasibility, or ROI."
+        : "Enplanements mean passenger boardings. The latest year may be preliminary; passenger volume or growth alone does not prove investment suitability.",
+      context: { kind: "rank_airports", metric, stateCodes, limit, expansion, minimumPassengers: floor, airportCodes: rows.map((row) => row.airportCode) },
     };
   }
 
-  if (plan.kind === "airport_profile") {
-    const found = compareAirports(report.airports, plan.airportCodes || []).filter(Boolean);
-    if (!found.length) return noDataAnswer("I couldn't identify that airport in the FAA enplanement dataset.");
+  if (name === "compare_airports" || name === "airport_profile") {
+    const found = compareAirports(report.airports, referenceCodes).filter(Boolean);
+    const missing = referenceCodes.filter((code) => !found.some((airport) => airport.airportCode === code));
+    const reference = await loadAirportCoordinates().catch(() => ({}));
+    const rows = found.map((airport) => airportResult(airport, reference[airport.airportCode]));
     return {
-      intent: "airport_profile",
-      title: `${found[0].airportCode} airport snapshot`,
+      intent: name,
+      title: name === "airport_profile" ? "Airport snapshot" : "Airport passenger comparison",
       period,
-      summary: `${found[0].name} in ${found[0].city}, ${found[0].stateCode} recorded ${found[0].passengerVolume.toLocaleString()} enplanements in ${found[0].latestYear}, a ${found[0].growthPct >= 0 ? "+" : ""}${found[0].growthPct}% change from ${found[0].previousYear}.${airportReference[found[0].airportCode] ? ` It is classified as a ${airportReference[found[0].airportCode].facilityType?.replaceAll("_", " ") || "listed"} facility${airportReference[found[0].airportCode].scheduledService ? " with scheduled service" : ""}, at ${airportReference[found[0].airportCode].latitude.toFixed(3)}, ${airportReference[found[0].airportCode].longitude.toFixed(3)}.` : ""}`,
-      results: found.map((airport) => airportResult(airport, airportReference[airport.airportCode])),
-      source,
-      limitation: "FAA provides annual passenger boardings, not capacity, route-by-route traffic, or financial performance. Facility classification and coordinates come from the community-maintained OurAirports reference.",
-      context: { kind: "airport_profile", airportCodes: found.map((airport) => airport.airportCode) },
+      results: rows,
+      source: sourceFor(report),
+      limitation: `${missing.length ? `No FAA record found for ${missing.join(", ")}. ` : ""}Annual enplanements are boardings, not capacity, route-level traffic, or financial performance. Facility details are cross-referenced from OurAirports.`,
+      context: { kind: name, airportCodes: found.map((airport) => airport.airportCode) },
     };
   }
-
-  if (plan.kind === "explain_ranking") {
-    const selected = compareAirports(report.airports, plan.airportCodes || []).filter(Boolean);
-    const names = selected.slice(0, 3).map((airport) => `${airport.airportCode} (${airport.growthPct >= 0 ? "+" : ""}${airport.growthPct}% growth; ${airport.passengerVolume.toLocaleString()} enplanements)`);
-    return {
-      intent: "explain_ranking",
-      title: "How the ranking works",
-      period,
-      summary: plan.expansion
-        ? `The screening score weights peer-group passenger growth at 65% and passenger scale at 35%, after min-max normalization. ${names.join("; ")}.`
-        : `This list is sorted directly by ${plan.metric === "growthPct" ? "year-over-year growth" : "enplanements"}; it is not an investment score. ${names.join("; ")}.`,
-      results: selected.map((airport) => airportResult(airport, airportReference[airport.airportCode])),
-      source,
-      limitation: "A change to geography, year, or eligibility filters can change the relative results.",
-      context: plan,
-    };
-  }
-
-  if (plan.kind === "compare_airports") {
-    const found = compareAirports(report.airports, plan.airportCodes || []).filter(Boolean);
-    const missing = (plan.airportCodes || []).filter((code) => !found.some((airport) => airport.airportCode === code));
-    return {
-      intent: "compare_airports",
-      title: "Airport passenger comparison",
-      period,
-      summary: found.map((airport) => `${airport.airportCode} recorded ${airport.passengerVolume.toLocaleString()} enplanements (${airport.growthPct >= 0 ? "+" : ""}${airport.growthPct}%).`).join(" "),
-      results: found.map(airportResult),
-      source,
-      limitation: missing.length ? `No matching FAA record was found for: ${missing.join(", ")}. ${"Enplanements are boardings and do not measure available capacity."}` : "Enplanements are passenger boardings and do not measure available capacity or congestion.",
-      context: { kind: "compare_airports", airportCodes: found.map((airport) => airport.airportCode) },
-    };
-  }
-
-  return noDataAnswer("I can rank airports by passengers or growth, compare airports, or show an airport snapshot. Which airport, state/region, or measure should I use?");
+  throw new Error(`Unsupported data tool: ${name}`);
 }
 
-function noDataAnswer(summary) {
-  return { intent: null, title: "Let's narrow that down", summary, results: [], source: null, limitation: "No numeric result is shown until the airport, geography, or measure is clear." };
+function getModelHistory(history = []) {
+  return history
+    .filter((turn) => ["user", "assistant"].includes(turn.role) && typeof turn.content === "string")
+    .slice(-12)
+    .map((turn) => ({ role: turn.role, content: turn.content.slice(0, 3000) }));
 }
 
-function investmentDataGapAnswer(plan) {
-  const airportLabel = plan.airportCodes?.length ? ` for ${plan.airportCodes.join(", ")}` : "";
-  return {
-    intent: "investment_data_gap",
-    title: "Investment diligence data not available",
-    summary: `I can't substantiate project ROI, modernization cost, or unused terminal capacity${airportLabel} from the current public datasets. I can still compare published enplanements and growth as a first-pass screen.`,
-    results: [],
-    source: null,
-    limitation: "Do not treat passenger growth or delay proxies as an ROI or capacity estimate. A decision-grade case needs airport financials, terminal design capacity/throughput, project scope and cost, airline schedules, and demand forecasts.",
-    context: { kind: "investment_data_gap", airportCodes: plan.airportCodes || [] },
-  };
+async function requestModel(messages, tools = AI_TOOLS) {
+  const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      temperature: 0.2,
+      messages,
+      tools,
+      tool_choice: "auto",
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw new Error(`AI provider returned HTTP ${response.status}. Check the local provider settings and API key.`);
+  return response.json();
 }
-
-function analyzeDemoIntent(kind) {
-  if (kind === "la_congestion") {
-    const results = compareCongestion(DEMO.congestion, ["LAX", "SNA"]);
-    return {
-      intent: kind,
-      title: "Illustrative congestion comparison",
-      period: DEMO.period,
-      summary: results.map((item) => `${item.airportCode}: ${item.delayRatePct}% delayed operations and ${item.averageDelayMinutes} average delay minutes.`).join(" "),
-      results,
-      source: { name: "Bundled illustrative inputs", url: "", mode: "DEMO", note: DEMO.label },
-      limitation: "These operational values are synthetic, not reported observations. A production answer needs matched-period BTS records and a defined delay threshold.",
-      context: { kind, airportCodes: ["LAX", "SNA"] },
-    };
-  }
-  if (kind === "anc_long_haul") {
-    const result = longHaulShare(DEMO.ancSegments, DEMO.airportCoordinates);
-    return {
-      intent: kind,
-      title: "Illustrative ANC route-distance analysis",
-      period: DEMO.period,
-      summary: `${result.longHaulFlights} of ${result.totalFlights} demonstration flights meet the ${result.thresholdMiles.toLocaleString()}-mile definition (${result.percentage}%).`,
-      results: result.longHaulRoutes,
-      metric: result,
-      source: { name: "Bundled illustrative routes and airport coordinates", url: "https://ourairports.com/data/", mode: "DEMO", note: DEMO.label },
-      limitation: "Flight counts are synthetic. Long-haul means at least 3,000 great-circle miles; this is not a measured share of scheduled flights.",
-      context: { kind, airportCodes: ["ANC"] },
-    };
-  }
-  if (kind === "sfo_unmet_demand") {
-    const result = demandPressure(DEMO.sfoPressure);
-    return {
-      intent: kind,
-      title: "Illustrative SFO pressure indicator",
-      period: DEMO.period,
-      summary: `Illustrative pressure score: ${result.score}/100, using load factor, delays, and cancellations.`,
-      metric: result,
-      results: [{ airportCode: "SFO", ...DEMO.sfoPressure }],
-      source: { name: "Bundled illustrative inputs", url: "", mode: "DEMO", note: DEMO.label },
-      limitation: "This cannot estimate missed bookings. Public flight data does not reveal travelers who searched but could not book.",
-      context: { kind, airportCodes: ["SFO"] },
-    };
-  }
-}
-
-async function answerQuestion(question, history = [], previousContext = null) {
-  let report;
-  try {
-    report = await loadFaaEnplanements();
-  } catch {
-    report = null;
-  }
-  const airports = report?.airports || [];
-  const localPlan = parseAirportQuery(question, airports, previousContext || {}, history);
-  const modelPlan = report ? await classifyWithModel(question, history, previousContext, airports) : null;
-  const plan = modelPlan || localPlan;
-
-  if (plan.kind === "investment_data_gap") return investmentDataGapAnswer(plan);
-  if (["la_congestion", "anc_long_haul", "sfo_unmet_demand"].includes(plan.kind)) return analyzeDemoIntent(plan.kind);
-  if (report) {
-    const airportReference = plan.kind === "airport_profile" || plan.kind === "explain_ranking"
-      ? await loadAirportCoordinates().catch(() => ({}))
-      : {};
-    return answerFromFaa(plan, report, airportReference);
-  }
-  return noDataAnswer("FAA data is temporarily unavailable. Try again shortly; no substitute figures are being presented as live data.");
-}
-
-module.exports = { answerQuestion, extractPassengerFloor, extractStateCodes, isExpansionCandidate, parseAirportQuery, resolveAirportMentions };
