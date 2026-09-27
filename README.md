@@ -57,7 +57,7 @@ warnings, session_id}`. `GET /api/methodology` returns the scoring formulas; `GE
 ## Tests and data refresh
 
 ```bash
-.venv/bin/pytest -q                       # 88 offline tests on real-data fixture slices
+.venv/bin/pytest -q                       # 90 offline tests on real-data fixture slices
 .venv/bin/pytest -q -m network            # opt-in live-source checks
 .venv/bin/python scripts/refresh_data.py --ontime 2026-05 2026-06 2026-07   # rebuild data/snapshots (slow BTS downloads)
 .venv/bin/python scripts/client_run.py    # replay the investor acceptance session against a running server

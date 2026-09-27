@@ -54,6 +54,16 @@ def test_follow_ups_use_session_context(engine):
     assert slots.tool == "compare_congestion" and set(slots.arguments["codes"]) == {"LAX", "SNA", "SFO"}
 
 
+def test_rank_context_survives_a_profile_follow_up(engine):
+    session = Session(id="t")
+    rules_router.answer(engine, session, "Which airports in New England are strong candidates for terminal expansion?")
+    rules_router.answer(engine, session, "tell me about the second one")
+    p = rules_router.plan(engine, session, "what if I ignore scale?")
+    assert p.tool == "rank_airports" and p.arguments["weights"]["scale"] == 0.0 and p.arguments["states"] == NEW_ENGLAND
+    why = rules_router.plan(engine, session, "Why is the first one ranked above the second?")
+    assert why.tool == "rank_airports" and len(why.arguments["codes"]) == 2 and why.arguments["codes"][0] == "BOS"
+
+
 def test_ambiguous_follow_up_asks_for_clarification(engine):
     out = rules_router.answer(engine, Session(id="t"), "what is the long haul share?")
     assert out["intent"] == "clarify" and out["tool_results"] == []
@@ -116,7 +126,15 @@ def test_ground_check_flags_only_numbers_absent_from_tool_results():
     text = "LAX scores 55.8 with 36,497,303 enplanements; 19.7% of arrivals delayed; forecast to 2035. Bogus figure 123.4% and 999 flights."
     check = ground_check(text, results)
     assert check["ungrounded"] == ["123.4", "999"]
-    assert check["checked"] == 6  # numbers <= 10 are ignored
+    assert check["checked"] == 6  # small integers are ignored
+
+
+def test_ground_check_handles_abbreviations_durations_and_recent_turns():
+    results = [{"data": {"enplanements": 437108, "ratio": 1.122, "floor": 100000, "max": "1 hour and 42 minutes"}, "arguments": {}, "method": "scale 0-100"}]
+    text = "About 0.44M enplanements (100k floor), 12% above peak, ground delay max 1h 42m, in the Lower-48, index 0-100."
+    assert ground_check(text, results)["ungrounded"] == []
+    assert ground_check("SFO index 85.5 from before", [])["ungrounded"] == ["85.5"]
+    assert ground_check("SFO index 85.5 from before", [], extra_pool={85.5})["ungrounded"] == []
 
 
 # ---------------------------------------------------------------- orchestrator

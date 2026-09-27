@@ -73,6 +73,7 @@ def plan(engine: Engine, session: Session, text: str) -> Plan:
     codes = resolved["codes"] + resolved["places"]
     states = resolved["states"]
     last = session.last_result or {}
+    last_rank = session.last_by_tool.get("rank_airports") if hasattr(session, "last_by_tool") else None
     active = list(session.active_airports)
 
     if GAP_RE.search(lowered) and not LONG_HAUL_RE.search(lowered):
@@ -122,13 +123,19 @@ def plan(engine: Engine, session: Session, text: str) -> Plan:
             return Plan("congestion", "compare_congestion", {"codes": merged})
         return Plan("rank", "rank_airports", {"codes": merged, "min_enplanements": 0, "limit": 0})
     ordinal = _ordinal(text)
+    if ordinal is not None and last_rank and not codes and re.search(r"\bwhy\b", lowered) and re.search(r"\b(above|over|higher|ahead|before|beat)\b", lowered):
+        airports = last_rank.get("airports", [])
+        pair = [a for i, a in enumerate(airports) if i in {0, 1}] if ordinal == 1 else airports[max(0, ordinal - 2):ordinal]
+        if len(pair) == 2:
+            return Plan("rank", "rank_airports", {"codes": pair, "min_enplanements": 0, "limit": 0},
+                        "Side-by-side scores for the two airports; the drivers line explains what separates them.")
     if ordinal is not None and last.get("airports") and not codes:
         airports = last["airports"]
         idx = ordinal - 1 if ordinal > 0 else len(airports) - 1
         if 0 <= idx < len(airports):
             return Plan("profile", "airport_profile", {"code": airports[idx]})
-    if SCALE_OFF_RE.search(lowered) and last.get("tool") == "rank_airports":
-        args = dict(last.get("arguments", {}))
+    if SCALE_OFF_RE.search(lowered) and last_rank:
+        args = dict(last_rank.get("arguments", {}))
         args.pop("weights", None)
         args["weights"] = {"forecast_growth": 0.30, "demand_momentum": 0.20, "capacity_pressure": 0.30, "scale": 0.0}
         return Plan("rank", "rank_airports", args, "Re-ran the previous screen with the scale weight set to zero.")
@@ -144,8 +151,8 @@ def plan(engine: Engine, session: Session, text: str) -> Plan:
             args["limit"] = 0
         elif re.search(r"national|nationwide|in the (us|u\.s\.|united states|country)|across the (us|country)", lowered):
             pass
-        elif last.get("tool") == "rank_airports" and re.search(r"\b(those|these|them|sort|re-?rank|again|instead)\b", lowered):
-            args = dict(last.get("arguments", {}))
+        elif last_rank and re.search(r"\b(those|these|them|sort|re-?rank|again|instead)\b", lowered):
+            args = dict(last_rank.get("arguments", {}))
         elif not states and not codes and last.get("states"):
             args["states"] = last["states"]
         if floor is not None:

@@ -153,7 +153,7 @@ available, so unserved passengers cannot be counted: this is a pressure indicato
 
 ## 8. Testing
 
-`pytest` runs 88 offline tests on real-data fixture slices: source parsers (including the BTS URL cipher), the airport
+`pytest` runs 90 offline tests on real-data fixture slices: source parsers (including the BTS URL cipher), the airport
 registry and its text-resolution collisions (`AND`, `SEA` vs Washington, "LA", "Washington state"), normalization,
 each KPI (determinism, weights, sensitivity, missing data), the rules router and follow-ups, tool envelopes, the
 grounding check, the orchestrator with a fake LLM (tool loop and fallback), and the HTTP API including input

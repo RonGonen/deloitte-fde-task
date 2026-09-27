@@ -37,7 +37,9 @@ CAVEATS = [
     "'Demonstrated peak operations' is the highest annual air-carrier + air-taxi operations recorded since 1990, not an "
     "engineered runway capacity; fleet mix and procedures have changed since that year.",
     "The FAA TAF forecast is unconstrained (it assumes capacity will be provided).",
-    "Delay statistics include weather-driven delays; the weather share is shown so it can be separated from structural congestion.",
+    "BTS 'NAS' delays include flow restrictions caused by non-extreme weather (low ceilings, wind) as well as airport and airspace "
+    "volume; the separate 'weather' category is extreme weather only. A high NAS share therefore means the airfield/airspace cannot "
+    "absorb demand under ordinary conditions, which is still a capacity signal, but it is not weather-free.",
 ]
 
 

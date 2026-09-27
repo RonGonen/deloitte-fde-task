@@ -11,7 +11,7 @@ from app.kpi.normalize import confidence_level, normalized_signal, weighted_scor
 WEIGHTS: Dict[str, float] = {"del15_pct": 0.35, "nas_share_pct": 0.20, "cancel_pct": 0.15, "avg_taxi_out_min": 0.15, "ops_per_runway": 0.15}
 LABELS = {
     "del15_pct": "Arrivals delayed 15+ min (%)",
-    "nas_share_pct": "Share of delays attributed to NAS/airport capacity & weather (%)",
+    "nas_share_pct": "Share of delays attributed to the NAS: airport/airspace volume and non-extreme weather flow restrictions (%)",
     "cancel_pct": "Arrivals cancelled (%)",
     "avg_taxi_out_min": "Average taxi-out time (min)",
     "ops_per_runway": "Air-carrier + air-taxi operations per qualifying runway (annual)",
@@ -46,8 +46,9 @@ def congestion_table(table: pd.DataFrame, min_enplanements: float = 100_000) -> 
     return universe
 
 
-def compare_congestion(table: pd.DataFrame, codes: Sequence[str], nas_status: Optional[Dict[str, object]] = None) -> Dict[str, object]:
-    universe = congestion_table(table)
+def compare_congestion(table: pd.DataFrame, codes: Sequence[str], nas_status: Optional[Dict[str, object]] = None,
+                       min_enplanements: float = 100_000) -> Dict[str, object]:
+    universe = congestion_table(table, min_enplanements)
     medians = {k: _clean(universe.loc[universe["has_delay"].astype(bool), k].median()) if k in ("del15_pct", "nas_share_pct", "cancel_pct")
                else _clean(universe[k].median()) for k in WEIGHTS}
     airports: List[Dict[str, object]] = []
@@ -96,5 +97,6 @@ def compare_congestion(table: pd.DataFrame, codes: Sequence[str], nas_status: Op
     airports.sort(key=lambda a: -(a["congestion_index"] if a["congestion_index"] is not None else -1))
     return {
         "airports": airports, "not_found": not_found, "national_medians": medians, "labels": LABELS, "weights": WEIGHTS,
+        "universe_size": int(len(universe)), "min_enplanements": min_enplanements,
         "method": METHOD_TEXT, "live_status_update_time": (nas_status or {}).get("update_time"),
     }

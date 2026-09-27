@@ -5,10 +5,11 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 SESSION_TTL_SECONDS = 60 * 60
 MAX_TURNS_KEPT = 12
+RECENT_NUMBER_TURNS = 3
 
 
 @dataclass
@@ -18,8 +19,22 @@ class Session:
     updated_at: float = field(default_factory=time.time)
     messages: List[Dict[str, str]] = field(default_factory=list)   # {"role": "user"|"assistant", "content": str}
     last_result: Optional[Dict[str, Any]] = None                    # {"tool", "arguments", "airports", "states"}
+    last_by_tool: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     active_airports: List[str] = field(default_factory=list)
     active_states: List[str] = field(default_factory=list)
+    number_pools: List[Set[float]] = field(default_factory=list)   # numbers from recent tool results, for grounding
+
+    @property
+    def recent_numbers(self) -> Set[float]:
+        merged: Set[float] = set()
+        for pool in self.number_pools:
+            merged |= pool
+        return merged
+
+    def push_numbers(self, pool: Set[float]) -> None:
+        if pool:
+            self.number_pools.append(set(pool))
+            self.number_pools = self.number_pools[-RECENT_NUMBER_TURNS:]
 
     def add_turn(self, role: str, content: str) -> None:
         self.messages.append({"role": role, "content": content})
@@ -29,6 +44,7 @@ class Session:
 
     def remember(self, tool: str, arguments: Dict[str, Any], airports: List[str], states: Optional[List[str]] = None) -> None:
         self.last_result = {"tool": tool, "arguments": dict(arguments), "airports": list(airports), "states": list(states or [])}
+        self.last_by_tool[tool] = dict(self.last_result)
         if airports:
             self.active_airports = list(airports)
         if states:

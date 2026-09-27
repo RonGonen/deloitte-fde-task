@@ -23,7 +23,7 @@
         const rows = [];
         while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(lines[i]); i++; }
         const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
-        const body = rows.filter((r) => !/^\s*\|?\s*:?-{2,}/.test(r.replace(/\|/g, "").trim()) || !/^[\s|:-]+$/.test(r));
+        const body = rows.filter((r) => !/^[\s|:\-]+$/.test(r)); // drop markdown separator rows like |---|---|
         const header = cells(body[0]);
         html += "<table><thead><tr>" + header.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>";
         body.slice(1).forEach((r) => { html += "<tr>" + cells(r).map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>"; });

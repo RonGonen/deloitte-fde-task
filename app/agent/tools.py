@@ -111,7 +111,8 @@ def source_caveats(engine: Engine, keys: Sequence[str]) -> List[str]:
     if "taf" in keys and engine.taf:
         out.append(f"FAA TAF actuals run through {engine.taf.last_actual_year}; TAF forecasts are unconstrained (they assume capacity is provided).")
     if "delay" in keys and engine.delay:
-        out.append(f"BTS delay statistics cover domestic flights of reporting carriers, arrivals-based, {engine.delay.period_label}; they include weather-driven delays.")
+        out.append(f"BTS delay statistics cover domestic flights of reporting carriers, arrivals-based, {engine.delay.period_label}. "
+                   "'NAS' causes include airport/airspace volume and non-extreme weather flow restrictions (low ceilings, wind); the 'weather' category is extreme weather only.")
     if "ontime" in keys and engine.ontime:
         out.append(f"Route/taxi-out snapshot months: {engine.ontime.period_label}; domestic reporting carriers only (no international, no all-cargo flights).")
     if "ourairports" in keys and engine.reference:

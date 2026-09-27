@@ -18,8 +18,9 @@ from app.engine import Engine
 
 log = logging.getLogger(__name__)
 MAX_TOOL_ROUNDS = 4
-NUMBER_RE = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s?([MKBmkb])(?![\w]))?(?![\w])")
-SUFFIX_MULTIPLIER = {"k": 1_000.0, "m": 1_000_000.0, "b": 1_000_000_000.0}
+NUMBER_RE = re.compile(r"(?<![\w.\-])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?:\s?([MKBmkb])(?![\w]))?(?![\w])")
+SUFFIX_MULTIPLIER = {"k": 1_000.0, "K": 1_000.0, "M": 1_000_000.0, "B": 1_000_000_000.0}  # lowercase m/b read as minutes/units, not millions
+SMALL_INTEGER_IGNORED = 12  # list numbering, month counts, runway counts
 
 
 def _json_default(value: Any) -> Any:
@@ -61,9 +62,8 @@ def _numbers_in(value: Any, out: Set[float]) -> None:
                 pass
 
 
-def _grounded(candidate: float, decimals: int, pool: Set[float], relative: bool) -> bool:
-    """Match within the candidate's own rounding precision; large/abbreviated numbers also get 0.5% slack."""
-    tolerance_abs = 0.5 * 10 ** (-decimals)
+def _grounded(candidate: float, tolerance_abs: float, pool: Set[float], relative: bool) -> bool:
+    """Match within the candidate's displayed rounding precision; large plain numbers also get 0.5% slack."""
     for v in pool:
         for scaled in (v, v * 100.0, v / 100.0, (v - 1.0) * 100.0):
             tolerance = max(tolerance_abs, 0.005 * abs(scaled)) if relative else tolerance_abs
@@ -72,20 +72,26 @@ def _grounded(candidate: float, decimals: int, pool: Set[float], relative: bool)
     return False
 
 
-def ground_check(text: str, tool_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def numbers_in_results(tool_results: List[Dict[str, Any]]) -> Set[float]:
+    pool: Set[float] = set()
+    for r in tool_results:
+        for key in ("data", "arguments", "sources", "caveats", "method"):
+            _numbers_in(r.get(key), pool)
+    return pool
+
+
+def ground_check(text: str, tool_results: List[Dict[str, Any]], extra_pool: Optional[Set[float]] = None) -> Dict[str, Any]:
     """Report which numbers in the answer cannot be traced to any tool result.
 
     Tolerant on purpose: a text number is grounded if some tool value (or its x100 / /100
-    percent-fraction twin) matches it within its own rounding precision or 0.5%. Numbers in
-    source metadata and caveats (years, periods) count as grounded. Suffixes like 36.5M are
-    expanded. Small integers (<= 10) are ignored because they are usually list numbering.
+    percent-fraction twin, or ratio-minus-one as a percent) matches it within the precision the
+    text displays; plain numbers >= 1000 also get 0.5% slack. Abbreviations like 0.44M or 100k
+    are expanded and matched at their displayed precision (0.44M -> +/- 5,000). Numbers in source
+    metadata, caveats and method text count as grounded, as do numbers from recent turns passed in
+    ``extra_pool``. Integers <= 12 are ignored (list numbering, month counts); lowercase m/b
+    suffixes are treated as units (minutes), not millions.
     """
-    pool: Set[float] = set()
-    for r in tool_results:
-        _numbers_in(r.get("data"), pool)
-        _numbers_in(r.get("arguments"), pool)
-        _numbers_in(r.get("sources"), pool)
-        _numbers_in(r.get("caveats"), pool)
+    pool: Set[float] = numbers_in_results(tool_results) | set(extra_pool or ())
     candidates: List[Any] = []
     for m in NUMBER_RE.finditer(text):
         raw = m.group(0).strip()
@@ -93,14 +99,18 @@ def ground_check(text: str, tool_results: List[Dict[str, Any]]) -> Dict[str, Any
             value = float((m.group(1) + (m.group(2) or "")).replace(",", ""))
         except ValueError:
             continue
-        suffix = (m.group(3) or "").lower()
+        suffix = m.group(3) or ""
+        decimals = len(m.group(2)) - 1 if m.group(2) else 0
+        if suffix and suffix not in SUFFIX_MULTIPLIER:
+            continue  # "42m" in "1h 42m" is a duration, not a quantity we can check
         if suffix:
-            value *= SUFFIX_MULTIPLIER[suffix]
-        elif value <= 10:
+            multiplier = SUFFIX_MULTIPLIER[suffix]
+            candidates.append((raw, value * multiplier, 0.5 * 10 ** (-decimals) * multiplier, False))
             continue
-        decimals = 0 if suffix else (len(m.group(2)) - 1 if m.group(2) else 0)
-        candidates.append((raw, value, decimals, bool(suffix) or value >= 1000))
-    ungrounded = [raw for raw, value, decimals, relative in candidates if not _grounded(value, decimals, pool, relative)]
+        if value <= SMALL_INTEGER_IGNORED and decimals == 0:
+            continue
+        candidates.append((raw, value, 0.5 * 10 ** (-decimals), value >= 1000))
+    ungrounded = [raw for raw, value, tol, relative in candidates if not _grounded(value, tol, pool, relative)]
     return {"checked": len(candidates), "ungrounded": sorted(set(ungrounded))}
 
 
@@ -161,9 +171,11 @@ class Orchestrator:
         tool_results = payload["tool_results"]
         sources = _dedupe_sources(tool_results)
         caveats = _dedupe([c for r in tool_results for c in r.get("caveats", [])])
-        grounding = ground_check(payload["text"], tool_results) if tool_results else {"checked": 0, "ungrounded": []}
+        grounding = ground_check(payload["text"], tool_results, session.recent_numbers) if (tool_results or session.recent_numbers) \
+            else {"checked": 0, "ungrounded": []}
+        session.push_numbers(numbers_in_results(tool_results))
         if mode == "llm" and grounding["ungrounded"]:
-            warnings.append("Numbers not traceable to a data source: " + ", ".join(grounding["ungrounded"][:8]))
+            warnings.append("Numbers not traceable to a data source in this or recent turns: " + ", ".join(grounding["ungrounded"][:8]))
         return ChatResponse(session_id=session.id, text=payload["text"], mode=mode, provider=provider, model=model,
                             tool_results=json.loads(to_json(tool_results)), sources=sources, caveats=caveats,
                             latency_ms=int((time.time() - started) * 1000), warnings=warnings + payload.get("warnings", []))

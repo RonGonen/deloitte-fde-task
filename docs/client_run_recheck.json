@@ -1,0 +1,226 @@
+[
+  {
+    "id": "INV-01",
+    "question": "Which airports in New England are strong candidates for terminal expansion?",
+    "purpose": "PDF question 1: ranked screen with method and caveats",
+    "mode": "llm",
+    "model": "claude-fable-5-1",
+    "tools": [
+      "rank_airports"
+    ],
+    "latency_s": 36.5,
+    "warnings": [],
+    "text": "**Boston Logan (BOS) is the clear New England standout (Expansion Opportunity Score 69.9), with Portland ME (PWM, 55.2), Burlington (BTV, 53.1) and New Haven (HVN, 52.0) forming a distant second tier.** All 10 New England airports above the 100,000-enplanement floor were scored against a 233-airport national universe.\n\n**Evidence**\n\n| Rank | Airport | Score | Growth | Momentum | Cap. pressure | Scale | Enplanements CY2025 | YoY | TAF 10-yr CAGR | Arrivals delayed 15+ min |\n|---|---|---|---|---|---|---|---|---|---|---|\n| 1 | BOS | 69.9 | 74.5 | 34.1 | 73.6 | 93.5 | 21.0M | -0.3% | 2.38% | 25.9% |\n| 2 | PWM | 55.2 | 53.2 | 64.6 | 48.0 | 59.5 | 1.29M | +5.3% | 1.98% | 20.9% |\n| 3 | BTV | 53.1 | 59.7 | 40.3 | 58.7 | 47.4 | 0.71M | +5.9% | 2.09% | 24.4% |\n| 4 | HVN | 52.0 | 39.0 | 89.1 | 43.2 | 47.8 | 0.74M | +25.2% | 1.77% | n/a |\n| 5 | BGR | 51.7 | 64.9 | 56.5 | 46.2 | 35.3 | 0.44M | +16.1% | 2.18% | 21.9% |\n| 6 | PVD | 51.7 | 30.3 | 75.8 | 45.4 | 69.4 | 2.12M | +6.7% | 1.54% | 23.6% |\n| 7 | BDL | 44.3 | 27.3 | 28.1 | 50.5 | 76.7 | 3.28M | -0.1% | 1.47% | 23.5% |\n\nMHT (35.5), ACK (37.1) and ORH (25.1) round out the region. Sources: FAA enplanements (CY2025 preliminary), FAA TAF 2025, BTS delay causes (Aug 2025–Jul 2026), OurAirports, FAA Slot Administration.\n\n**Why**\n- **BOS** combines national-top-decile scale with the region's highest forecast growth and capacity pressure: 80,268 operations per qualifying runway, forecast operations already 1.08× its demonstrated peak, and 42% of delays attributed to NAS (volume/flow) causes. Its weak spot is flat recent demand (-0.3% YoY).\n- **PWM, BTV, BGR** score on growth/momentum rather than binding capacity; forecast operations sit at 0.57–0.83× their peaks, so pressure is modest.\n- **HVN** is a pure momentum story (+25% YoY, recovery ratio ~12× vs 2019 from a very low base) with weaker long-run forecast growth.\n- **PVD and BDL** have scale but rank low on TAF forecast growth (1.5% CAGR), dragging their scores.\n\n**Assumptions & uncertainty**\n- Scores are relative national percentiles for screening, not return estimates; they exclude project cost, terminal/gate capacity and financing.\n- CY2025 enplanements are preliminary; TAF actuals run through 2024 and forecasts are unconstrained (assume capacity is provided).\n- BTS delay data is domestic, arrivals-based, trailing 12 months; HVN, ACK and ORH have no BTS delay coverage, so their capacity-pressure scores rest on structural factors only.\n- Runway counts are an airfield proxy, not terminal capacity. Confidence: high for all 10.\n\n**Suggested follow-ups**\n- \"Why is BOS's unmet demand so high — what's the demand-pressure breakdown?\"\n- \"Re-rank New England with less weight on scale to see the smaller-airport picture.\"",
+    "sources": [
+      {
+        "name": "FAA Passenger Boarding (Enplanement) Data",
+        "url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2025-all-enplanements-preliminary.xlsx",
+        "period": "CY2025 vs CY2024 (preliminary)",
+        "retrieved_at": "2026-09-27T15:41:31+00:00",
+        "vintage": "CY2025 preliminary"
+      },
+      {
+        "name": "FAA Terminal Area Forecast (TAF)",
+        "url": "https://taf.faa.gov/",
+        "period": "actuals to 2024, forecast 2025-2055",
+        "retrieved_at": "2026-09-27T15:41:32+00:00",
+        "vintage": "TAF 2025 (final, published 2026)"
+      },
+      {
+        "name": "BTS Airline On-Time Statistics and Delay Causes",
+        "url": "https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp",
+        "period": "2025-08 to 2026-07",
+        "retrieved_at": "2026-09-27T15:42:19+00:00",
+        "vintage": "monthly; domestic flights of reporting carriers; arrivals-based"
+      },
+      {
+        "name": "OurAirports open data (airports, runways)",
+        "url": "https://ourairports.com/data/",
+        "period": "current",
+        "retrieved_at": "2026-09-27T15:41:33+00:00",
+        "vintage": "community-maintained, refreshed daily"
+      },
+      {
+        "name": "FAA Slot Administration",
+        "url": "https://www.faa.gov/about/office_org/headquarters_offices/ato/service_units/systemops/perf_analysis/slot_administration",
+        "page_last_updated": "2026-08-11",
+        "verified_on": "2026-09-27",
+        "period": "current",
+        "retrieved_at": "2026-09-27",
+        "vintage": "page last updated 2026-08-11"
+      }
+    ],
+    "caveats": [
+      "Scores are relative national percentiles (0-100) for screening, not probabilities of success or investment returns; they do not include project costs, terminal/gate capacity or financing.",
+      "Percentiles are computed nationally across the universe; the state/region filter is applied after scoring.",
+      "FAA enplanements count passenger boardings (not total passengers); the latest year (CY2025) is preliminary.",
+      "FAA TAF actuals run through 2024; TAF forecasts are unconstrained (they assume capacity is provided).",
+      "BTS delay statistics cover domestic flights of reporting carriers, arrivals-based, 2025-08 to 2026-07. 'NAS' causes include airport/airspace volume and non-extreme weather flow restrictions (low ceilings, wind); the 'weather' category is extreme weather only.",
+      "Runway counts (open, paved, 5,000 ft or longer) are a physical airfield proxy, not terminal or gate capacity; coordinates and runways come from community-maintained OurAirports data."
+    ],
+    "confidence": [
+      "high"
+    ]
+  },
+  {
+    "id": "INV-05",
+    "question": "Compare LA and Santa Ana airport congestion levels.",
+    "purpose": "PDF question 2: congestion comparison",
+    "mode": "llm",
+    "model": "claude-fable-5-1",
+    "tools": [
+      "compare_congestion",
+      "resolve_airports"
+    ],
+    "latency_s": 38.1,
+    "warnings": [],
+    "text": "**LAX is moderately more congested than Santa Ana (Congestion Index 55.8 vs 47.5), but both sit in the middle of the national range: their delay and cancellation rates are actually *below* the national median, and their scores are driven by very high runway utilisation and NAS-attributed delays.** I interpreted \"LA\" as LAX (Los Angeles International); if you meant the wider LA basin (BUR, LGB, ONT) I can add those.\n\n**Evidence** (BTS delay causes Aug 2025–Jul 2026; taxi-out snapshot May–Jul 2026; TAF 2025 operations; OurAirports runways)\n\n| Metric | LAX | SNA | National median |\n|---|---|---|---|\n| Congestion Index (0–100) | 55.8 | 47.5 | — |\n| Arrivals delayed 15+ min | 19.7% (28th pctl) | 18.3% (21st pctl) | 21.7% |\n| Departures delayed 15+ min | 23.7% | 24.2% | — |\n| Delays attributed to NAS (volume/flow) | 25.2% (81st pctl) | 23.4% (73rd pctl) | 21.1% |\n| Arrivals cancelled | 1.02% | 0.91% | 1.81% |\n| Avg delay per delayed arrival | 67.3 min | 54.5 min | — |\n| Avg taxi-out | 18.2 min (80th pctl) | 16.3 min (56th pctl) | 15.8 min |\n| Ops per qualifying runway | 141,795 (4 runways) | 122,269 (1 runway) | 17,332 |\n| Slot status | Level 2 (schedule-facilitated) | Not slot-controlled | — |\n| Arrivals, trailing 12 months | 194,369 | 45,961 | — |\n| Enplanements CY2025 (prelim.) | 36.5M | 5.5M | — |\n\nLive FAA status: no active delay programs at either airport (checked 27 Sep 2026, 16:21 GMT).\n\n**Why it matters**\n- Both airports are in the **98th percentile for operations per runway**, meaning the airfield is intensively used; the 8-point gap comes mainly from LAX's longer taxi-outs (80th vs 56th pctl) and higher NAS share.\n- SNA's single-runway utilisation (~122k ops on one runway) is a structural constraint; LAX has more runways but spreads ~567k annual operations across them.\n- Because on-time performance at both is better than the median, congestion here is a story of *system saturation* (NAS causes, taxi times, runway load) rather than chronic unreliability—relevant to whether terminal expansion would be airfield-constrained.\n\n**Assumptions & uncertainty**\n- The Congestion Index is a relative national percentile composite (233 airports ≥100k enplanements), not a capacity measure.\n- BTS data covers domestic reporting carriers only, arrivals-based; LAX's large international operation is not in the delay or taxi-out figures, so its congestion is likely understated relative to SNA.\n- TAF operations are 2024 actuals; runway counts are an airfield proxy, not terminal/gate capacity. Confidence: high for both.\n\n**Suggested follow-ups**\n- \"What's the unmet-demand breakdown for SNA given its single runway?\"\n- \"Add BUR, LGB and ONT to see the full LA basin.\"",
+    "sources": [
+      {
+        "name": "BTS Airline On-Time Statistics and Delay Causes",
+        "url": "https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp",
+        "period": "2025-08 to 2026-07",
+        "retrieved_at": "2026-09-27T15:42:19+00:00",
+        "vintage": "monthly; domestic flights of reporting carriers; arrivals-based"
+      },
+      {
+        "name": "BTS Reporting Carrier On-Time Performance (flight-level)",
+        "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ",
+        "period": "2026-05, 2026-06, 2026-07",
+        "retrieved_at": "2026-09-27T15:55:00+00:00",
+        "vintage": "domestic scheduled flights of reporting carriers only"
+      },
+      {
+        "name": "FAA Terminal Area Forecast (TAF)",
+        "url": "https://taf.faa.gov/",
+        "period": "actuals to 2024, forecast 2025-2055",
+        "retrieved_at": "2026-09-27T15:41:32+00:00",
+        "vintage": "TAF 2025 (final, published 2026)"
+      },
+      {
+        "name": "OurAirports open data (airports, runways)",
+        "url": "https://ourairports.com/data/",
+        "period": "current",
+        "retrieved_at": "2026-09-27T15:41:33+00:00",
+        "vintage": "community-maintained, refreshed daily"
+      },
+      {
+        "name": "FAA Slot Administration",
+        "url": "https://www.faa.gov/about/office_org/headquarters_offices/ato/service_units/systemops/perf_analysis/slot_administration",
+        "page_last_updated": "2026-08-11",
+        "verified_on": "2026-09-27",
+        "period": "current",
+        "retrieved_at": "2026-09-27",
+        "vintage": "page last updated 2026-08-11"
+      },
+      {
+        "name": "FAA Passenger Boarding (Enplanement) Data",
+        "url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2025-all-enplanements-preliminary.xlsx",
+        "period": "CY2025 vs CY2024 (preliminary)",
+        "retrieved_at": "2026-09-27T15:41:31+00:00",
+        "vintage": "CY2025 preliminary"
+      }
+    ],
+    "caveats": [
+      "The Congestion Index is a relative national percentile composite; raw metrics are shown so they can be judged directly.",
+      "FAA TAF actuals run through 2024; TAF forecasts are unconstrained (they assume capacity is provided).",
+      "BTS delay statistics cover domestic flights of reporting carriers, arrivals-based, 2025-08 to 2026-07. 'NAS' causes include airport/airspace volume and non-extreme weather flow restrictions (low ceilings, wind); the 'weather' category is extreme weather only.",
+      "Route/taxi-out snapshot months: 2026-05, 2026-06, 2026-07; domestic reporting carriers only (no international, no all-cargo flights).",
+      "Runway counts (open, paved, 5,000 ft or longer) are a physical airfield proxy, not terminal or gate capacity; coordinates and runways come from community-maintained OurAirports data."
+    ],
+    "confidence": [
+      "high",
+      "high"
+    ]
+  },
+  {
+    "id": "INV-06",
+    "question": "Add SFO to that comparison.",
+    "purpose": "Follow-up: extend comparison set",
+    "mode": "llm",
+    "model": "claude-fable-5-1",
+    "tools": [
+      "compare_congestion"
+    ],
+    "latency_s": 39.0,
+    "warnings": [],
+    "text": "**SFO is in a different league: Congestion Index 85.5 versus 55.8 for LAX and 47.5 for SNA.** It ranks in the top 3% nationally on arrival delays, NAS-attributed delays and taxi-out time, and it currently has an active ground delay program (low ceilings, ~49 min average, 1 h 42 min max).\n\n**Evidence** (BTS delay causes Aug 2025–Jul 2026; taxi-out snapshot May–Jul 2026; TAF 2025 operations; OurAirports runways)\n\n| Metric | SFO | LAX | SNA | National median |\n|---|---|---|---|---|\n| Congestion Index (0–100) | **85.5** | 55.8 | 47.5 | — |\n| Arrivals delayed 15+ min | 31.6% (98th pctl) | 19.7% (28th) | 18.3% (21st) | 21.7% |\n| Departures delayed 15+ min | 34.5% | 23.7% | 24.2% | — |\n| Delays attributed to NAS | 54.7% (98th pctl) | 25.2% (81st) | 23.4% (73rd) | 21.1% |\n| Extreme-weather share of delays | 2.0% | 3.4% | 2.5% | — |\n| Arrivals cancelled | 1.11% | 1.02% | 0.91% | 1.81% |\n| Avg delay per delayed arrival | 66.1 min | 67.3 min | 54.5 min | — |\n| Avg taxi-out | 25.1 min (98th pctl) | 18.2 min (80th) | 16.3 min (56th) | 15.8 min |\n| Ops per qualifying runway | 92,969 (4 rwys, 90th pctl) | 141,795 (4 rwys, 98th) | 122,269 (1 rwy, 98th) | 17,332 |\n| Slot status | Level 2 | Level 2 | Not slot-controlled | — |\n| Arrivals, trailing 12 months | 150,816 | 194,369 | 45,961 | — |\n| Enplanements CY2025 (prelim.) | 26.3M | 36.5M | 5.5M | — |\n| Live FAA status (27 Sep 2026, 16:21 GMT) | Ground delay program, low ceilings | None | None | — |\n\n**Why it matters**\n- SFO's congestion is overwhelmingly a **flow/airspace problem**: over half of its delay minutes are NAS-attributed (volume and non-extreme weather flow restrictions such as low ceilings), versus roughly a quarter at LAX and SNA. Today's ground delay program for low ceilings is a live example of that pattern.\n- Unlike LAX and SNA, whose on-time performance is *better* than the national median, SFO's arrival and departure delay rates are near the top of the country, and its 25-minute taxi-outs point to surface and departure-queue saturation.\n- Notably, SFO has *lower* operations per runway than LAX or SNA, so its congestion is less about raw runway load and more about how usable the airfield is under adverse ceilings. General knowledge, not from the data: SFO's closely spaced parallel runways lose arrival capacity in low-visibility conditions, which is consistent with the NAS-heavy profile.\n- For an expansion thesis, this suggests SFO's binding constraint is airfield/airspace throughput rather than terminal space, which would need to be weighed against any terminal investment.\n\n**Assumptions & uncertainty**\n- The Congestion Index is a relative national percentile composite across 233 airports with ≥100k enplanements; it is not a capacity measure.\n- BTS figures are domestic reporting-carrier arrivals only; SFO and LAX both have large international operations not captured, so absolute congestion is likely understated at both.\n- TAF operations are 2024 actuals; runway counts are an airfield proxy, not terminal or gate capacity. Live status is a point-in-time snapshot. Confidence: high for all three.\n\n**Suggested follow-ups**\n- \"What's SFO's unmet-demand breakdown — is forecast demand already above its demonstrated peak?\"\n- \"Rank SFO, LAX and SNA as expansion candidates to see how congestion trades off against growth and scale.\"",
+    "sources": [
+      {
+        "name": "BTS Airline On-Time Statistics and Delay Causes",
+        "url": "https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp",
+        "period": "2025-08 to 2026-07",
+        "retrieved_at": "2026-09-27T15:42:19+00:00",
+        "vintage": "monthly; domestic flights of reporting carriers; arrivals-based"
+      },
+      {
+        "name": "BTS Reporting Carrier On-Time Performance (flight-level)",
+        "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?gnoyr_VQ=FGJ",
+        "period": "2026-05, 2026-06, 2026-07",
+        "retrieved_at": "2026-09-27T15:55:00+00:00",
+        "vintage": "domestic scheduled flights of reporting carriers only"
+      },
+      {
+        "name": "FAA Terminal Area Forecast (TAF)",
+        "url": "https://taf.faa.gov/",
+        "period": "actuals to 2024, forecast 2025-2055",
+        "retrieved_at": "2026-09-27T15:41:32+00:00",
+        "vintage": "TAF 2025 (final, published 2026)"
+      },
+      {
+        "name": "OurAirports open data (airports, runways)",
+        "url": "https://ourairports.com/data/",
+        "period": "current",
+        "retrieved_at": "2026-09-27T15:41:33+00:00",
+        "vintage": "community-maintained, refreshed daily"
+      },
+      {
+        "name": "FAA Slot Administration",
+        "url": "https://www.faa.gov/about/office_org/headquarters_offices/ato/service_units/systemops/perf_analysis/slot_administration",
+        "page_last_updated": "2026-08-11",
+        "verified_on": "2026-09-27",
+        "period": "current",
+        "retrieved_at": "2026-09-27",
+        "vintage": "page last updated 2026-08-11"
+      }
+    ],
+    "caveats": [
+      "The Congestion Index is a relative national percentile composite; raw metrics are shown so they can be judged directly.",
+      "FAA TAF actuals run through 2024; TAF forecasts are unconstrained (they assume capacity is provided).",
+      "BTS delay statistics cover domestic flights of reporting carriers, arrivals-based, 2025-08 to 2026-07. 'NAS' causes include airport/airspace volume and non-extreme weather flow restrictions (low ceilings, wind); the 'weather' category is extreme weather only.",
+      "Route/taxi-out snapshot months: 2026-05, 2026-06, 2026-07; domestic reporting carriers only (no international, no all-cargo flights).",
+      "Runway counts (open, paved, 5,000 ft or longer) are a physical airfield proxy, not terminal or gate capacity; coordinates and runways come from community-maintained OurAirports data."
+    ],
+    "confidence": [
+      "high"
+    ]
+  },
+  {
+    "id": "INV-15",
+    "question": "Any delays at SFO right now?",
+    "purpose": "Live status",
+    "mode": "llm",
+    "model": "claude-fable-5-1",
+    "tools": [
+      "live_airport_status"
+    ],
+    "latency_s": 28.2,
+    "warnings": [],
+    "text": "**Yes — SFO currently has an active FAA ground delay program due to low ceilings, with average delays of 49 minutes and a maximum of 1 hour 42 minutes.** No ground stop or closure is in effect.\n\n**Evidence** (FAA NAS Status, live; updated Sun 27 Sep 2026 16:21 GMT, retrieved 16:21:49 GMT)\n\n| Item | SFO |\n|---|---|\n| Event type | Ground delay program |\n| Reason | Low ceilings |\n| Average delay | 49 minutes |\n| Maximum delay | 1 hour 42 minutes |\n| Ground stop / closure | None reported |\n\n**Why it matters**\n- This is a live example of the structural pattern in SFO's trailing-12-month data: 54.7% of its delay minutes are NAS-attributed (volume and flow restrictions, including non-extreme weather such as low ceilings), and it sits in the 98th percentile nationally for arrival delays and taxi-out time.\n- Today's program reinforces the earlier read that SFO's binding constraint is airfield/airspace throughput under adverse ceilings rather than terminal space — relevant to how a terminal investment thesis would be framed.\n\n**Assumptions & uncertainty**\n- Live status is a point-in-time operational snapshot; it says nothing about structural capacity and is never used in the Congestion Index or Expansion Opportunity Score.\n- Conditions can change within minutes; re-check before relying on this figure. Confidence: high for the snapshot itself.\n\n**Suggested follow-ups**\n- \"What's SFO's unmet-demand breakdown — how often are its delays NAS-attributed versus carrier or weather?\"\n- \"Are there any nationwide FAA delay programs active right now?\"",
+    "sources": [
+      {
+        "name": "FAA NAS Status (live)",
+        "url": "https://nasstatus.faa.gov/",
+        "period": "now",
+        "retrieved_at": "2026-09-27T16:21:49+00:00",
+        "vintage": "real-time"
+      }
+    ],
+    "caveats": [
+      "Live status is a point-in-time operational snapshot; it says nothing about structural capacity and is never used in the scores."
+    ],
+    "confidence": [
+      "high"
+    ]
+  }
+]
