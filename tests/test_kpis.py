@@ -117,3 +117,13 @@ def test_demand_pressure_for_sfo_is_high_with_reasons(table):
 
 def test_demand_pressure_outside_universe_is_explicit(table):
     assert "error" in demand_pressure(table, "DGG")
+
+
+def test_national_rank_is_consistent_across_selections(table):
+    national = expansion_scores(table, limit=0)["ranked"]
+    assert [x["national_rank"] for x in national] == list(range(1, len(national) + 1))
+    regional = expansion_scores(table, states=NEW_ENGLAND, limit=0)["ranked"]
+    by_lid = {x["lid"]: x["national_rank"] for x in national}
+    assert all(x["national_rank"] == by_lid[x["lid"]] for x in regional)
+    single = expansion_scores(table, codes=["HVN"], limit=0)["ranked"][0]
+    assert single["rank"] == 1 and single["national_rank"] == by_lid["HVN"] and single["national_rank"] > 1

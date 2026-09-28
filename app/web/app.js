@@ -88,7 +88,7 @@
         badges.appendChild(pill(meta.mode === "llm" ? "LLM: " + (meta.model || meta.provider) : "rules-based", meta.mode === "llm" ? "pill-llm" : "pill-rules"));
         if (meta.latency_ms != null) badges.appendChild(pill((meta.latency_ms / 1000).toFixed(1) + " s", "pill-muted"));
         const conf = topConfidence(meta.tool_results);
-        if (conf) badges.appendChild(pill("confidence: " + conf, conf === "high" ? "pill-ok" : "pill-warn"));
+        if (conf) badges.appendChild(pill("confidence: " + conf.level + (conf.tool ? " (" + conf.tool + ")" : ""), conf.level === "high" ? "pill-ok" : "pill-warn"));
         renderSources(node.querySelector(".sources-panel .panel-body"), meta);
         node.querySelector(".data-json").textContent = meta.tool_results && meta.tool_results.length ? JSON.stringify(meta.tool_results, null, 2) : "No tool was needed for this answer.";
         (meta.warnings || []).forEach((w) => { const d = document.createElement("div"); d.className = "warning"; d.textContent = "⚠ " + w; body.appendChild(d); });
@@ -99,12 +99,19 @@
     return node;
   }
 
+  const TOOL_NAMES = { rank_airports: "expansion score", airport_profile: "airport profile", compare_congestion: "congestion index",
+    long_haul_share: "long-haul share", demand_pressure: "unmet demand indicator", live_airport_status: "live status",
+    explain_methodology: "methodology", resolve_airports: "airport lookup" };
   function topConfidence(results) {
     if (!results || !results.length) return null;
     const order = { high: 0, medium: 1, low: 2 };
-    let worst = null;
-    results.forEach((r) => { const l = r.confidence && r.confidence.level; if (l && (worst === null || order[l] > order[worst])) worst = l; });
-    return worst;
+    let worst = null, worstTool = null, distinct = 0;
+    results.forEach((r) => {
+      const l = r.confidence && r.confidence.level; if (!l) return; distinct++;
+      if (worst === null || order[l] > order[worst]) { worst = l; worstTool = r.tool; }
+    });
+    if (!worst) return null;
+    return { level: worst, tool: (worst !== "high" && distinct > 1) ? (TOOL_NAMES[worstTool] || worstTool) : null };
   }
 
   function renderSources(container, meta) {
@@ -234,6 +241,7 @@
         const tr = document.createElement("tr");
         tr.title = "Ask the agent about " + (x.iata || x.lid);
         tr.dataset.code = x.iata || x.lid;
+        tr.dataset.rank = x.rank;
         const tdRank = document.createElement("td"); tdRank.textContent = x.rank;
         const tdName = document.createElement("td");
         const strong = document.createElement("strong"); strong.textContent = (x.iata || x.lid) + " ";
@@ -257,7 +265,11 @@
   }
   topBody.addEventListener("click", (e) => {
     const row = e.target && e.target.closest("tr"); if (!row || !row.dataset.code) return;
-    inputEl.value = "Tell me about " + row.dataset.code + " and why it ranks where it does."; send();
+    const scope = regionSel.value ? regionSel.options[regionSel.selectedIndex].textContent : "the United States";
+    const floor = floorSel.options[floorSel.selectedIndex].textContent;
+    inputEl.value = "Tell me about " + row.dataset.code + " and why it ranks #" + row.dataset.rank + " for expansion in " + scope +
+      " (airports with at least " + floor + " annual enplanements).";
+    send();
   });
   regionSel.addEventListener("change", loadTop);
   floorSel.addEventListener("change", loadTop);

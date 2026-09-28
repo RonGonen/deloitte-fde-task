@@ -256,8 +256,17 @@ def airport_profile(engine: Engine, args: Dict[str, Any], session: Optional[Sess
             "avg_delay_min_per_delayed": _clean(r["avg_delay_min_per_delayed"])}
         profile["route_snapshot"] = None if not bool(r["has_ontime"]) else {
             "departures": _clean(r["departures"]), "dep_delayed_15_pct": _clean(r["dep_del15_pct"]), "avg_taxi_out_min": _clean(r["avg_taxi_out_min"])}
-        scored = scoring.expansion_scores(engine.metrics_table(), codes=[airport.lid], limit=1)["ranked"]
-        profile["expansion_score"] = scored[0] if scored else None
+        national = scoring.expansion_scores(engine.metrics_table(), limit=0)
+        mine = next((x for x in national["ranked"] if x["lid"] == airport.lid), None)
+        if mine is not None:
+            mine = dict(mine)
+            mine.pop("rank", None)  # avoid a misleading position within a one-airport selection
+            same_state = [x for x in national["ranked"] if x["state"] == airport.state]
+            mine["rank_in_state"] = next(i for i, x in enumerate(same_state, start=1) if x["lid"] == airport.lid)
+            mine["state_airports_scored"] = len(same_state)
+            mine["universe_size"] = national["universe_size"]
+            mine["min_enplanements"] = national["min_enplanements"]
+        profile["expansion_score"] = mine
     if session is not None:
         session.remember("airport_profile", args, [airport.lid])
     return {

@@ -135,6 +135,9 @@ def _score_universe(table: pd.DataFrame, min_enplanements: float, weights: Dict[
                 "arr_flights": _clean(r["arr_flights"]),
             },
         })
+    ordered = sorted(rows, key=lambda x: (-(x["score"] if x["score"] is not None else -1), x["lid"]))
+    for position, row in enumerate(ordered, start=1):
+        row["national_rank"] = position  # position among every airport in this percentile universe
     if len(cache) >= 32:
         cache.clear()
     cache[key] = (rows, int(len(universe)))
@@ -166,7 +169,7 @@ def expansion_scores(
         selected = [x for x in selected if x["state"] in wanted_states]
     selected.sort(key=lambda x: (-(x["score"] if x["score"] is not None else -1), x["lid"]))
     for i, x in enumerate(selected, start=1):
-        x["rank"] = i
+        x["rank"] = i  # position within the requested selection; national_rank is the position in the whole universe
     return {
         "ranked": selected[:limit] if limit else selected,
         "candidates_in_filter": len(selected),

@@ -350,3 +350,14 @@ def test_cache_backs_off_after_a_failed_download(monkeypatch, tmp_path):
         cache.fetch_bytes("https://example.invalid/x", "unit_test_source.bin", 60)
     assert calls["n"] == 1  # second attempt short-circuited by the back-off
     cache._last_failure.clear()
+
+
+def test_profile_reports_national_and_state_rank_not_a_selection_rank(engine):
+    from app.kpi.scoring import expansion_scores
+    profile = T.dispatch(engine, "airport_profile", {"code": "HVN"}, None)["data"]
+    es = profile["expansion_score"]
+    assert "rank" not in es and es["national_rank"] > 1 and es["rank_in_state"] >= 1 and es["state_airports_scored"] >= es["rank_in_state"]
+    national = expansion_scores(engine.metrics_table(), limit=0)["ranked"]
+    assert es["national_rank"] == next(x["national_rank"] for x in national if x["lid"] == "HVN")
+    bos = T.dispatch(engine, "airport_profile", {"code": "BOS"}, None)["data"]["expansion_score"]
+    assert bos["rank_in_state"] == 1

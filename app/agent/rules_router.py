@@ -331,8 +331,10 @@ def narrate_profile(result: Dict[str, Any], engine: Engine) -> str:
     if d.get("expansion_score"):
         es = d["expansion_score"]
         s = es["sub_scores"]
-        lines.append(f"- Expansion Opportunity Score: **{_n(es['score'], 1)}** (forecast growth {_n(s['forecast_growth'], 0)}, momentum {_n(s['demand_momentum'], 0)}, "
-                     f"capacity pressure {_n(s['capacity_pressure'], 0)}, scale {_n(s['scale'], 0)}; confidence {es['confidence']}).")
+        lines.append(f"- Expansion Opportunity Score: **{_n(es['score'], 1)}**, national rank #{es.get('national_rank', 'n/a')} of {es.get('universe_size', 'n/a')} airports "
+                     f"with at least {_n(es.get('min_enplanements'))} enplanements, #{es.get('rank_in_state', 'n/a')} of {es.get('state_airports_scored', 'n/a')} in {a['state']} "
+                     f"(forecast growth {_n(s['forecast_growth'], 0)}, momentum {_n(s['demand_momentum'], 0)}, capacity pressure {_n(s['capacity_pressure'], 0)}, "
+                     f"scale {_n(s['scale'], 0)}; confidence {es['confidence']}).")
     ev = [e for items in d["live_status"].get("events", {}).values() for e in items]
     lines.append("- Live FAA status: " + ("; ".join(f"{e['type'].replace('_', ' ')} ({e.get('reason', '')})" for e in ev) if ev else "no active delay programs") + ".")
     if d.get("taf_history"):
