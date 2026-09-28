@@ -168,8 +168,11 @@ def rank_airports(engine: Engine, args: Dict[str, Any], session: Optional[Sessio
         states = list(dict.fromkeys(states + region_states))
     codes = _codes(args.get("codes"))
     codes = [engine.registry.get(c).lid for c in codes if engine.registry.get(c)]
-    min_enpl = int(args.get("min_enplanements") or scoring.DEFAULT_MIN_ENPLANEMENTS)
-    limit = int(args.get("limit") or 10)
+    min_raw, limit_raw = args.get("min_enplanements"), args.get("limit")
+    min_enpl = scoring.DEFAULT_MIN_ENPLANEMENTS if min_raw is None else int(min_raw)
+    limit = 10 if limit_raw is None else int(limit_raw)  # 0 = no cap
+    if min_enpl < 0 or not (0 <= limit <= 50):
+        raise ToolError("min_enplanements must be >= 0 and limit between 0 and 50")
     weights = args.get("weights") or None
     if weights:
         weights = {k: float(v) for k, v in weights.items() if k in scoring.DEFAULT_WEIGHTS}
@@ -177,6 +180,9 @@ def rank_airports(engine: Engine, args: Dict[str, Any], session: Optional[Sessio
     ranked = result["ranked"]
     levels = [x["confidence"] for x in ranked]
     caveats = [SCORE_CAVEAT, "Percentiles are computed nationally across the universe; the state/region filter is applied after scoring."]
+    if result.get("excluded_below_floor"):
+        caveats.append(f"Not scored because they are below the {min_enpl:,.0f}-enplanement floor of the percentile universe: "
+                       f"{', '.join(result['excluded_below_floor'])}. Lower min_enplanements to include them.")
     if any(x["missing_components"] for x in ranked):
         caveats.append("Some airports lack BTS delay coverage (fewer than 2,000 reporting-carrier arrivals); their capacity-pressure score uses structural signals only and confidence is lowered.")
     caveats += source_caveats(engine, ["faa", "taf", "delay", "ourairports"])

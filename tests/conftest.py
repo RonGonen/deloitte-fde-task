@@ -10,7 +10,7 @@ from app.engine import Engine
 from app.sources.bts_delay_cause import DelayCause
 from app.sources.bts_ontime import OnTimeSnapshot
 from app.sources.faa_enplanements import parse_workbook
-from app.sources.ourairports import AirportReference
+from app.sources.ourairports import reference_from_csv
 from app.sources.taf import Taf
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -29,13 +29,7 @@ def faa():
 
 @pytest.fixture(scope="session")
 def reference():
-    airports = pd.read_csv(FIXTURES / "ourairports_sample.csv", dtype=str, keep_default_na=False)
-    airports["latitude_deg"] = pd.to_numeric(airports["latitude_deg"], errors="coerce")
-    airports["longitude_deg"] = pd.to_numeric(airports["longitude_deg"], errors="coerce")
-    airports["scheduled_service"] = airports["scheduled_service"].str.lower().eq("true")
-    runways = pd.read_csv(FIXTURES / "runways_sample.csv", dtype={"airport_ident": str, "surface": str, "le_ident": str, "he_ident": str})
-    runways["qualifying"] = runways["qualifying"].astype(str).str.lower().eq("true")
-    return AirportReference(airports, runways, "2026-09-27T00:00:00+00:00")
+    return reference_from_csv(FIXTURES / "ourairports_sample.csv", FIXTURES / "runways_sample.csv", "2026-09-27T00:00:00+00:00")
 
 
 @pytest.fixture(scope="session")

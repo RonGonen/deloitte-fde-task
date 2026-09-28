@@ -22,12 +22,22 @@ Requires Python 3.9 or newer (tested on 3.9.6) and internet access for the live 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-cp .env.example .env            # optional; see "LLM providers"
+cp .env.example .env            # optional, non-secret settings; see "LLM providers"
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. The first start fetches the FAA workbook (150 KB), the BTS delay-cause file (~1 MB) and
-the OurAirports tables (~17 MB) into `.cache/`; later starts take about two seconds.
+Open http://127.0.0.1:8000. The first start fetches the FAA workbook (150 KB) and the BTS delay-cause file (~1 MB) into
+`.cache/`; everything else (TAF, routes, airports and runways) comes from the committed snapshots, so startup is about
+two seconds and works offline with `OFFLINE=1`.
+
+### Security
+
+- The server is meant to run on loopback. Requests from any non-loopback client are refused (403) unless `APP_TOKEN`
+  is set; with it set, every `/api/*` request must send `Authorization: Bearer <token>` (the UI asks for it once).
+- Provide `APP_TOKEN` and `ANTHROPIC_API_KEY` through the shell environment for the session
+  (`export APP_TOKEN=$(openssl rand -hex 24)`), not in `.env` or any other file.
+- All inputs are validated; responses carry a same-origin Content-Security-Policy and standard security headers; there
+  is no CORS. Internal error details stay in the server log.
 
 The page has two parts: the chat, and an analyst side panel with the top expansion candidates (switchable by region
 and volume floor; click a row to ask about that airport), live FAA airport status, data vintages and the score weights.
@@ -39,7 +49,7 @@ Voice: the microphone button uses the browser's Web Speech API (Chrome) and the 
 |---|---|---|
 | `auto` (default) | `anthropic` if `ANTHROPIC_API_KEY` is set, else `claude_cli` if the `claude` CLI is installed, else `rules` | - |
 | `claude_cli` | Headless Claude Code CLI (`claude -p`) with the account you are logged into | Claude Code installed and logged in |
-| `anthropic` | Anthropic API via the official SDK, native tool use | `ANTHROPIC_API_KEY` in `.env` (git-ignored, never committed) |
+| `anthropic` | Anthropic API via the official SDK, native tool use | `ANTHROPIC_API_KEY` exported in the shell environment (never stored in a file) |
 | `rules` | Deterministic rules-based interpreter and narrator, no LLM | nothing |
 
 `LLM_MODEL` defaults to `claude-fable-5-1`; `claude-sonnet-5` is faster and cheaper. The rules path is also the
@@ -62,9 +72,9 @@ returns the scoring formulas; `GET /api/docs` is the OpenAPI UI.
 ## Tests and data refresh
 
 ```bash
-.venv/bin/pytest -q                       # 90 offline tests on real-data fixture slices
+.venv/bin/pytest -q                       # 101 offline tests on real-data fixture slices
 .venv/bin/pytest -q -m network            # opt-in live-source checks
-.venv/bin/python scripts/refresh_data.py --ontime 2026-05 2026-06 2026-07   # rebuild data/snapshots (slow BTS downloads)
+.venv/bin/python scripts/refresh_data.py --ontime 2026-05 2026-06 2026-07   # rebuild data/snapshots (TAF, OurAirports, delay causes, routes)
 .venv/bin/python scripts/client_run.py    # replay the investor acceptance session against a running server
 ```
 

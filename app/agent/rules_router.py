@@ -121,13 +121,13 @@ def plan(engine: Engine, session: Session, text: str) -> Plan:
         merged = list(dict.fromkeys(last.get("airports", []) + codes))
         if last["tool"] == "compare_congestion":
             return Plan("congestion", "compare_congestion", {"codes": merged})
-        return Plan("rank", "rank_airports", {"codes": merged, "min_enplanements": 0, "limit": 0})
+        return Plan("rank", "rank_airports", {"codes": merged, "limit": 0})
     ordinal = _ordinal(text)
     if ordinal is not None and last_rank and not codes and re.search(r"\bwhy\b", lowered) and re.search(r"\b(above|over|higher|ahead|before|beat)\b", lowered):
         airports = last_rank.get("airports", [])
         pair = [a for i, a in enumerate(airports) if i in {0, 1}] if ordinal == 1 else airports[max(0, ordinal - 2):ordinal]
         if len(pair) == 2:
-            return Plan("rank", "rank_airports", {"codes": pair, "min_enplanements": 0, "limit": 0},
+            return Plan("rank", "rank_airports", {"codes": pair, "limit": 0},
                         "Side-by-side scores for the two airports; the drivers line explains what separates them.")
     if ordinal is not None and last.get("airports") and not codes:
         airports = last["airports"]
@@ -147,7 +147,6 @@ def plan(engine: Engine, session: Session, text: str) -> Plan:
             args["states"] = states
         elif codes:
             args["codes"] = codes
-            args["min_enplanements"] = 0
             args["limit"] = 0
         elif re.search(r"national|nationwide|in the (us|u\.s\.|united states|country)|across the (us|country)", lowered):
             pass

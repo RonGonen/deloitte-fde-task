@@ -7,6 +7,27 @@
   let sessionId = sessionStorage.getItem("aiia.session") || (window.crypto && crypto.randomUUID ? crypto.randomUUID() : null);
   if (sessionId) sessionStorage.setItem("aiia.session", sessionId);
   let speakEnabled = false;
+  let inFlight = false;
+
+  // ---------- API helper: bearer token (if the server requires one), ok-checks, fixed error messages ----------
+  let apiToken = sessionStorage.getItem("aiia.token") || "";
+  async function api(path, options, retry) {
+    const opts = Object.assign({ headers: {} }, options || {});
+    opts.headers = Object.assign({}, opts.headers);
+    if (apiToken) opts.headers["Authorization"] = "Bearer " + apiToken;
+    const res = await fetch(path, opts);
+    if (res.status === 401 && !retry) {
+      const entered = window.prompt("This server requires an access token (APP_TOKEN). Paste it to continue:");
+      if (entered && entered.trim()) { apiToken = entered.trim(); sessionStorage.setItem("aiia.token", apiToken); return api(path, options, true); }
+    }
+    let body = null;
+    try { body = await res.json(); } catch (e) { body = null; }
+    if (!res.ok) {
+      const detail = body && body.detail ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : "HTTP " + res.status;
+      const err = new Error(detail); err.status = res.status; throw err;
+    }
+    return body;
+  }
 
   // ---------- safe markdown-ish renderer (escape first, then add our own tags) ----------
   const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -145,32 +166,31 @@
   // ---------- send ----------
   async function send() {
     const message = inputEl.value.trim();
-    if (!message) return;
+    if (!message || inFlight) return;
+    inFlight = true;
     inputEl.value = "";
     addMessage("user", message);
     sendBtn.disabled = true;
     const pending = addMessage("assistant", "Working… fetching FAA/BTS data and computing scores.");
     pending.classList.add("pending");
     try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      const data = await api("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, session_id: sessionId }) });
-      const data = await res.json();
       pending.remove();
-      if (!res.ok) { addMessage("assistant", "Request rejected: " + (data.detail && JSON.stringify(data.detail)), null); return; }
       sessionId = data.session_id; sessionStorage.setItem("aiia.session", sessionId);
       addMessage("assistant", data.text, data);
       speak(data.text);
     } catch (err) {
       pending.remove();
-      addMessage("assistant", "The server could not be reached: " + err.message, null);
-    } finally { sendBtn.disabled = false; inputEl.focus(); }
+      addMessage("assistant", err.status ? "The server rejected the request (" + err.message + ")." : "The server could not be reached. Is it running on this machine?", null);
+    } finally { inFlight = false; sendBtn.disabled = false; inputEl.focus(); }
   }
   $("composer").addEventListener("submit", (e) => { e.preventDefault(); send(); });
   inputEl.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
   $("chips").addEventListener("click", (e) => { const q = e.target && e.target.getAttribute("data-q"); if (q) { inputEl.value = q; send(); } });
 
   // ---------- health ----------
-  fetch("/api/health").then((r) => r.json()).then((h) => {
+  api("/api/health").then((h) => {
     const p = $("provider-pill");
     p.textContent = h.provider === "rules" ? "rules-based (no LLM configured)" : "LLM: " + h.model + " via " + h.provider;
     p.className = "pill " + (h.provider === "rules" ? "pill-rules" : "pill-llm");
@@ -185,7 +205,7 @@
   const fmtInt = (n) => (n == null ? "n/a" : Math.round(n).toLocaleString("en-US"));
 
   function loadRegions() {
-    return fetch("/api/regions").then((r) => r.json()).then((d) => {
+    return api("/api/regions").then((d) => {
       (d.regions || []).forEach((name) => {
         const opt = document.createElement("option"); opt.value = name;
         opt.textContent = name.replace(/\b\w/g, (c) => c.toUpperCase()); regionSel.appendChild(opt);
@@ -193,18 +213,23 @@
     }).catch(() => {});
   }
 
+  let topRequestId = 0;
+  function showTopMessage(text) {
+    topBody.textContent = "";
+    const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 4; td.className = "muted"; td.textContent = text;
+    tr.appendChild(td); topBody.appendChild(tr);
+  }
   function loadTop() {
+    const requestId = ++topRequestId;
     topScope.textContent = "loading…";
     const params = new URLSearchParams({ min_enplanements: floorSel.value, limit: "10" });
     if (regionSel.value) params.set("region", regionSel.value);
-    return fetch("/api/rank?" + params.toString()).then((r) => r.json()).then((d) => {
+    return api("/api/rank?" + params.toString()).then((d) => {
+      if (requestId !== topRequestId) return; // a newer request superseded this one
       const data = d.data || {};
+      if (data.weights) renderWeights(data.weights);
+      if (!data.ranked || !data.ranked.length) { showTopMessage(data.message || "No airports match this scope."); topScope.textContent = "no results"; return; }
       topBody.textContent = "";
-      if (!data.ranked || !data.ranked.length) {
-        const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 4; td.className = "muted";
-        td.textContent = data.message || "No airports match this scope."; tr.appendChild(td); topBody.appendChild(tr);
-        topScope.textContent = "no results"; return;
-      }
       data.ranked.forEach((x) => {
         const tr = document.createElement("tr");
         tr.title = "Ask the agent about " + (x.iata || x.lid);
@@ -222,7 +247,11 @@
       });
       const scopeLabel = (data.scope && data.scope.states && data.scope.states.length) ? data.scope.states.join(", ") : "United States";
       topScope.textContent = scopeLabel + " · " + data.candidates_in_filter + " of " + data.universe_size + " airports ≥ " + fmtInt(data.min_enplanements);
-    }).catch(() => { topScope.textContent = "unavailable"; });
+    }).catch((err) => {
+      if (requestId !== topRequestId) return;
+      showTopMessage(err.status ? "Ranking unavailable (" + err.message + ")." : "Ranking unavailable: the server could not be reached.");
+      topScope.textContent = "unavailable";
+    });
   }
   topBody.addEventListener("click", (e) => {
     const row = e.target && e.target.closest("tr"); if (!row || !row.dataset.code) return;
@@ -232,12 +261,13 @@
   floorSel.addEventListener("change", loadTop);
 
   function loadLive() {
-    fetch("/api/live").then((r) => r.json()).then((d) => {
+    if (document.visibilityState === "hidden") return; // nobody is looking; save the FAA feed and the server
+    api("/api/live").then((d) => {
       const data = d.data || {}; const list = $("live-list"); list.textContent = "";
       $("live-time").textContent = data.update_time ? "FAA " + data.update_time.replace(/^\w+\s/, "") : "";
       const items = [];
       Object.entries(data.by_type || {}).forEach(([type, arr]) => arr.forEach((ev) => items.push(Object.assign({}, ev, { type: type }))));
-      if (data.error) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "Live feed unavailable: " + data.error; list.appendChild(li); return; }
+      if (data.error) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "FAA live status feed is unavailable right now."; list.appendChild(li); return; }
       if (!items.length) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "No active ground delays, ground stops or closures nationwide."; list.appendChild(li); return; }
       const order = { ground_stop: 0, closure: 1, ground_delay: 2, general_delay: 3 };
       const rank = (t) => (order[t] === undefined ? 9 : order[t]);
@@ -251,7 +281,7 @@
         list.appendChild(li);
       });
       if (items.length > 12) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "+" + (items.length - 12) + " more airports with active events"; list.appendChild(li); }
-    }).catch(() => {});
+    }).catch(() => { const list = $("live-list"); list.textContent = ""; const li = document.createElement("li"); li.className = "muted"; li.textContent = "FAA live status feed is unavailable right now."; list.appendChild(li); });
   }
 
   function renderDataCard(h) {
@@ -272,12 +302,14 @@
     });
   }
 
-  function renderWeights() {
-    const w = [["Forecast growth", 30], ["Demand momentum", 20], ["Capacity pressure", 30], ["Scale", 20]];
+  const WEIGHT_LABELS = { forecast_growth: "Forecast growth", demand_momentum: "Demand momentum", capacity_pressure: "Capacity pressure", scale: "Scale" };
+  function renderWeights(weights) {
     const box = $("weights"); box.textContent = "";
-    w.forEach(([label, pct]) => {
+    Object.keys(WEIGHT_LABELS).forEach((key) => {
+      if (weights[key] == null) return;
+      const pct = Math.round(weights[key] * 100);
       const row = document.createElement("div"); row.className = "w";
-      const l = document.createElement("span"); l.textContent = label;
+      const l = document.createElement("span"); l.textContent = WEIGHT_LABELS[key];
       const track = document.createElement("div"); track.className = "track"; const fill = document.createElement("div"); fill.className = "fill"; fill.style.width = pct + "%"; track.appendChild(fill);
       const v = document.createElement("span"); v.textContent = pct + "%";
       row.appendChild(l); row.appendChild(track); row.appendChild(v); box.appendChild(row);
@@ -286,8 +318,8 @@
 
   loadRegions().then(loadTop);
   loadLive();
-  renderWeights();
   setInterval(loadLive, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadLive(); });
 
   addMessage("assistant", "Hello. I screen US airports for modernization and expansion opportunities using FAA enplanement and forecast data, BTS delay statistics, runway and slot data. Ask a question or pick a suggestion below. I will always show my sources and what the data cannot tell you.", null);
 })();

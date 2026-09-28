@@ -57,7 +57,7 @@ Design rules:
 | FAA Terminal Area Forecast 2025 | Actual enplanements and operations 1990-2024 by category; FAA forecast 2025-2055 | `scripts/refresh_data.py` builds `data/snapshots/taf_compact.csv` from the 15 MB FAA zip |
 | BTS Airline On-Time Statistics and Delay Causes | Monthly arrivals, delayed >=15 min, cancellations, delay-cause split, by airport and carrier | Live trailing 12 months (2025-08 to 2026-07 at build time), 24 h cache, committed snapshot fallback |
 | BTS Reporting Carrier On-Time Performance (flight level) | Origin, destination, distance, taxi-out, departure delay | `refresh_data.py` downloads 33 MB monthly files (May-Jul 2026) and writes `routes_by_origin.csv`, `ontime_origin_metrics.csv` |
-| OurAirports (public domain) | IATA/ICAO/FAA codes, coordinates, runways (length, surface, open) | Live, 7-day cache |
+| OurAirports (public domain) | IATA/ICAO/FAA codes, coordinates, runways (length, surface, open) | Compact committed snapshot (airports and runways that join to an FAA airport, ~0.4 MB) built by `refresh_data.py`; live 17 MB download only when the snapshot is missing |
 | FAA NAS Status feed | Live ground delay programs, ground stops, closures | Live, 5 min cache; annotation only |
 | FAA Slot Administration page (verified 2026-09-27) | Level 3 slot-controlled: JFK, LGA, DCA; Level 2 schedule-facilitated: ORD, LAX, EWR, SFO | Reference file with source URL and dates |
 
@@ -140,8 +140,11 @@ available, so unserved passengers cannot be counted: this is a pressure indicato
   bad-weather airport from being mistaken for a capacity-constrained one.
 - **Claude Fable 5.1 by default.** Best interpretation quality for a demo; each turn takes 20-40 s and roughly $0.30-0.60
   through the CLI. `LLM_MODEL=claude-sonnet-5` is a faster, cheaper alternative.
-- **In-memory sessions, loopback binding, no auth.** This is a single-analyst local tool; a shared deployment would need
-  authentication, persistent sessions, request logging and rate limits.
+- **Single-analyst security model.** The server binds to loopback; non-loopback clients are refused unless `APP_TOKEN`
+  is set, in which case every API call needs a bearer token (constant-time compared). Secrets come from the shell
+  environment, never from files. Responses carry a same-origin CSP and security headers, there is no CORS, inputs are
+  validated at the boundary, and internal error text stays in the log. Sessions are in-memory; a multi-user deployment
+  would add per-user identity, persistent sessions, request logging and rate limits.
 
 ## 7. Assumptions, uncertainty and scope
 
@@ -157,7 +160,7 @@ available, so unserved passengers cannot be counted: this is a pressure indicato
 
 ## 8. Testing
 
-`pytest` runs 90 offline tests on real-data fixture slices: source parsers (including the BTS URL cipher), the airport
+`pytest` runs 101 offline tests on real-data fixture slices: source parsers (including the BTS URL cipher), the airport
 registry and its text-resolution collisions (`AND`, `SEA` vs Washington, "LA", "Washington state"), normalization,
 each KPI (determinism, weights, sensitivity, missing data), the rules router and follow-ups, tool envelopes, the
 grounding check, the orchestrator with a fake LLM (tool loop and fallback), and the HTTP API including input

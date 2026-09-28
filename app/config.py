@@ -41,6 +41,9 @@ class Settings:
 
         self.host: str = os.getenv("HOST", "127.0.0.1")
         self.port: int = int(os.getenv("PORT", "8000"))
+        # Access token for the HTTP API. Provide it through the shell environment for the session
+        # (export APP_TOKEN=...), never in .env or any file. Required for any non-loopback client.
+        self.app_token: str = (os.getenv("APP_TOKEN") or "").strip()
         self.offline: bool = _bool("OFFLINE", False)
         self.http_timeout: float = float(os.getenv("HTTP_TIMEOUT", "90"))
 

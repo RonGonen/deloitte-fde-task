@@ -22,6 +22,12 @@
     "route_rows": 18261,
     "url_pattern": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_{year}_{month}.zip"
   },
+  "ourairports": {
+    "airports": 1633,
+    "retrieved_at": "2026-09-27T15:41:33+00:00",
+    "runways": 2947,
+    "url": "https://ourairports.com/data/"
+  },
   "taf": {
     "edition": "TAF 2025 (final, published 2026)",
     "last_actual_year": 2024,

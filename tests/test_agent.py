@@ -256,3 +256,97 @@ def test_api_regions_and_live(client):
     live = client.get("/api/live").json()
     assert "by_type" in live["data"] and live["data"]["by_type"]["ground_delay"][0]["airport"] == "SFO"
     assert live["sources"][0]["name"].startswith("FAA NAS")
+
+
+# ------------------------------------------------------------- review follow-ups
+def test_api_rank_honours_zero_floor_and_rejects_unknown_states(client):
+    zero = client.get("/api/rank", params={"min_enplanements": 0, "limit": 5}).json()
+    default = client.get("/api/rank", params={"limit": 5}).json()
+    assert zero["data"]["scope"]["min_enplanements"] == 0 and default["data"]["scope"]["min_enplanements"] == 100000
+    assert zero["data"]["universe_size"] > default["data"]["universe_size"]
+    assert client.get("/api/rank", params={"states": "ZZ"}).status_code == 422
+
+
+def test_api_regions_collapses_aliases(client):
+    names = client.get("/api/regions").json()["regions"]
+    assert len(names) == len(set(names)) and not ({"mid atlantic", "mid-atlantic"} <= set(names))
+
+
+def test_security_headers_present(client):
+    response = client.get("/api/health")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "default-src 'self'" in response.headers["Content-Security-Policy"]
+    assert "Content-Security-Policy" in client.get("/").headers
+
+
+def test_token_auth_when_configured(client, monkeypatch):
+    from app import main
+    monkeypatch.setattr(main.settings, "app_token", "correct-horse")
+    assert client.get("/api/health").status_code == 401
+    assert client.get("/api/health", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert client.get("/api/health", headers={"Authorization": "Bearer correct-horse"}).status_code == 200
+    assert client.get("/").status_code == 200  # static shell stays reachable; data does not
+
+
+def test_remote_clients_are_refused_without_token(engine, monkeypatch):
+    from app import main
+    monkeypatch.setitem(main._state, "orchestrator", Orchestrator(engine, SessionStore()))
+    monkeypatch.setattr(main.settings, "app_token", "")
+    remote = TestClient(main.app, client=("203.0.113.9", 4242))
+    assert remote.get("/api/health").status_code == 403
+    local = TestClient(main.app, client=("127.0.0.1", 4242))
+    assert local.get("/api/health").status_code == 200
+
+
+def test_rank_tool_default_floor_and_excluded_codes(engine):
+    from app.kpi.scoring import DEFAULT_MIN_ENPLANEMENTS
+    session = Session(id="t")
+    out = rules_router.answer(engine, session, "Compare BOS and SEA passenger traffic")
+    data = out["tool_results"][0]["data"]
+    assert data["scope"]["min_enplanements"] == DEFAULT_MIN_ENPLANEMENTS and [x["lid"] for x in data["ranked"]] == ["BOS", "SEA"]
+    below = T.dispatch(engine, "rank_airports", {"codes": ["BOS", "IAN"]}, None)  # IAN is a tiny CS airport in the fixture
+    assert below["data"]["excluded_below_floor"] == ["IAN"] and any("below the" in c for c in below["caveats"])
+    assert "must be >= 0" in T.dispatch(engine, "rank_airports", {"limit": 99})["error"]
+
+
+def test_expansion_scores_cache_returns_independent_copies(table):
+    from app.kpi.scoring import expansion_scores
+    first = expansion_scores(table, states=["MA"], limit=0)
+    second = expansion_scores(table, states=["MA"], limit=0)
+    assert first["ranked"][0]["rank"] == 1 and first == second
+    first["ranked"][0]["score"] = -1
+    assert expansion_scores(table, states=["MA"], limit=0)["ranked"][0]["score"] != -1
+    assert "_expansion_score_cache" in table.attrs
+
+
+def test_cache_backs_off_after_a_failed_download(monkeypatch, tmp_path):
+    import httpx
+    from app.sources import cache
+    monkeypatch.setattr(cache.settings, "cache_dir", tmp_path)
+    monkeypatch.setattr(cache.settings, "offline", False)
+    calls = {"n": 0}
+
+    class FailingClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def get(self, *args, **kwargs):
+            calls["n"] += 1
+            raise httpx.ConnectError("boom")
+
+    monkeypatch.setattr(cache.httpx, "Client", FailingClient)
+    cache._last_failure.clear()
+    with pytest.raises(cache.SourceUnavailable):
+        cache.fetch_bytes("https://example.invalid/x", "unit_test_source.bin", 60)
+    with pytest.raises(cache.SourceUnavailable):
+        cache.fetch_bytes("https://example.invalid/x", "unit_test_source.bin", 60)
+    assert calls["n"] == 1  # second attempt short-circuited by the back-off
+    cache._last_failure.clear()

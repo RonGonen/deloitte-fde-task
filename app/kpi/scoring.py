@@ -82,21 +82,19 @@ def _drivers(sub_scores: Dict[str, Optional[float]], weights_used: Dict[str, flo
     return contributions[:3]
 
 
-def expansion_scores(
-    table: pd.DataFrame,
-    states: Optional[Sequence[str]] = None,
-    codes: Optional[Sequence[str]] = None,
-    min_enplanements: float = DEFAULT_MIN_ENPLANEMENTS,
-    weights: Optional[Dict[str, float]] = None,
-    limit: int = 10,
-) -> Dict[str, object]:
-    weights = {**DEFAULT_WEIGHTS, **(weights or {})}
+def _score_universe(table: pd.DataFrame, min_enplanements: float, weights: Dict[str, float]) -> "tuple[List[Dict[str, object]], int]":
+    """Score every airport above the floor. Cached on the table (pandas ``attrs``) because the panel
+    and follow-up questions re-score the same universe with only the region filter changing."""
+    key = (float(min_enplanements), tuple(sorted(weights.items())))
+    cache = table.attrs.setdefault("_expansion_score_cache", {})
+    if key in cache:
+        rows, size = cache[key]
+        return [dict(r, sub_scores=dict(r["sub_scores"]), metrics=dict(r["metrics"])) for r in rows], size
     universe = table[table["enplanements"] >= min_enplanements].copy()
     if universe.empty:
-        return {"ranked": [], "universe_size": 0, "weights": weights, "min_enplanements": min_enplanements,
-                "message": f"No primary/commercial-service airports with at least {min_enplanements:,.0f} annual enplanements."}
+        cache[key] = ([], 0)
+        return [], 0
     comp = _component_frame(universe)
-
     rows: List[Dict[str, object]] = []
     for idx, r in universe.iterrows():
         subs = {k: _clean(comp.at[idx, k]) for k in DEFAULT_WEIGHTS}
@@ -104,6 +102,7 @@ def expansion_scores(
         no_scale = weighted_score({k: (subs[k], 0.0 if k == "scale" else weights[k]) for k in DEFAULT_WEIGHTS})
         missing = list(result["missing"])
         gaps = int(r["join_gaps"]) if not pd.isna(r["join_gaps"]) else 0
+        has_delay = bool(r["has_delay"])
         rows.append({
             "lid": r["lid"], "iata": r["iata"], "name": r["name"], "city": r["city"], "state": r["state"], "hub": r["hub"],
             "score": result["score"], "score_without_scale": no_scale["score"],
@@ -119,18 +118,39 @@ def expansion_scores(
                 "taf_growth_last_actual_pct": _clean(r["taf_growth_last_actual_pct"]), "forecast_cagr_pct": _clean(r["forecast_cagr_pct"]),
                 "taf_enpl_forecast_h": _clean(r["taf_enpl_forecast_h"]), "recovery_ratio": _clean(r["recovery_ratio"]),
                 "ops_per_runway": _clean(r["ops_per_runway"]), "runways_qualifying": _clean(r["runways_qualifying"]),
-                "slot_level": int(r["slot_level"]), "forecast_vs_peak": _clean(r["forecast_vs_peak"]),
-                "del15_pct": _clean(r["del15_pct"]) if bool(r["has_delay"]) else None,
-                "nas_share_pct": _clean(r["nas_share_pct"]) if bool(r["has_delay"]) else None,
-                "weather_share_pct": _clean(r["weather_share_pct"]) if bool(r["has_delay"]) else None,
-                "cancel_pct": _clean(r["cancel_pct"]) if bool(r["has_delay"]) else None,
+                "slot_level": int(r["slot_level"]) if not pd.isna(r["slot_level"]) else 0, "forecast_vs_peak": _clean(r["forecast_vs_peak"]),
+                "del15_pct": _clean(r["del15_pct"]) if has_delay else None,
+                "nas_share_pct": _clean(r["nas_share_pct"]) if has_delay else None,
+                "weather_share_pct": _clean(r["weather_share_pct"]) if has_delay else None,
+                "cancel_pct": _clean(r["cancel_pct"]) if has_delay else None,
                 "arr_flights": _clean(r["arr_flights"]),
             },
         })
+    if len(cache) >= 32:
+        cache.clear()
+    cache[key] = (rows, int(len(universe)))
+    return [dict(r, sub_scores=dict(r["sub_scores"]), metrics=dict(r["metrics"])) for r in rows], int(len(universe))
 
+
+def expansion_scores(
+    table: pd.DataFrame,
+    states: Optional[Sequence[str]] = None,
+    codes: Optional[Sequence[str]] = None,
+    min_enplanements: float = DEFAULT_MIN_ENPLANEMENTS,
+    weights: Optional[Dict[str, float]] = None,
+    limit: int = 10,
+) -> Dict[str, object]:
+    weights = {**DEFAULT_WEIGHTS, **(weights or {})}
+    rows, universe_size = _score_universe(table, min_enplanements, weights)
+    if not rows:
+        return {"ranked": [], "universe_size": 0, "weights": weights, "min_enplanements": min_enplanements,
+                "message": f"No primary/commercial-service airports with at least {min_enplanements:,.0f} annual enplanements."}
     selected = rows
+    excluded: List[str] = []
     if codes:
-        wanted = {c.upper() for c in codes}
+        wanted = [c.upper() for c in codes]
+        present = {x["lid"] for x in rows} | {x["iata"] for x in rows if x["iata"]}
+        excluded = [c for c in wanted if c not in present]
         selected = [x for x in selected if x["lid"] in wanted or (x["iata"] or "") in wanted]
     if states:
         wanted_states = {s.upper() for s in states}
@@ -141,7 +161,8 @@ def expansion_scores(
     return {
         "ranked": selected[:limit] if limit else selected,
         "candidates_in_filter": len(selected),
-        "universe_size": int(len(universe)),
+        "excluded_below_floor": excluded,
+        "universe_size": universe_size,
         "min_enplanements": min_enplanements,
         "weights": weights,
         "method": METHOD_TEXT,

@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.config import settings  # noqa: E402
-from app.sources import bts_delay_cause, bts_ontime, faa_enplanements, taf  # noqa: E402
+from app.sources import bts_delay_cause, bts_ontime, faa_enplanements, ourairports, taf  # noqa: E402
 from app.sources.cache import USER_AGENT  # noqa: E402
 
 
@@ -58,6 +58,18 @@ def refresh_taf(manifest: dict) -> None:
     manifest["faa_enplanements_fallback"] = {"source_url": faa.source_url, "latest_year": faa.latest_year,
                                              "preliminary": faa.preliminary, "retrieved_at": faa.retrieved_at}
     print(f"TAF: wrote {out} ({len(result.frame)} rows) in {time.time() - t0:.0f}s")
+
+
+def refresh_ourairports(manifest: dict) -> None:
+    print("OurAirports: downloading airports.csv and runways.csv (~17 MB) ...")
+    faa = faa_enplanements.load_faa_enplanements()
+    full = ourairports.load_airport_reference_live()
+    compact = ourairports.compact_reference(full, faa.frame["lid"])
+    compact.airports.to_csv(settings.snapshot_dir / ourairports.AIRPORTS_SNAPSHOT, index=False)
+    compact.runways.to_csv(settings.snapshot_dir / ourairports.RUNWAYS_SNAPSHOT, index=False)
+    manifest["ourairports"] = {"retrieved_at": full.retrieved_at, "airports": int(len(compact.airports)), "runways": int(len(compact.runways)),
+                               "url": "https://ourairports.com/data/"}
+    print(f"OurAirports: wrote compact snapshot ({len(compact.airports)} airports, {len(compact.runways)} runways)")
 
 
 def refresh_delay_cause(manifest: dict) -> None:
@@ -120,6 +132,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--skip-taf", action="store_true")
     parser.add_argument("--skip-delay", action="store_true")
+    parser.add_argument("--skip-ourairports", action="store_true")
     parser.add_argument("--ontime", nargs="*", default=None, metavar="YYYY-MM",
                         help="on-time months to include; default: every ontime_*.zip already in the cache")
     args = parser.parse_args()
@@ -127,6 +140,9 @@ def main() -> None:
     manifest = load_manifest()
     if not args.skip_taf:
         refresh_taf(manifest)
+        save_manifest(manifest)
+    if not args.skip_ourairports:
+        refresh_ourairports(manifest)
         save_manifest(manifest)
     if not args.skip_delay:
         refresh_delay_cause(manifest)
