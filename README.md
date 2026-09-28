@@ -80,7 +80,8 @@ returns the scoring formulas; `GET /api/docs` is the OpenAPI UI.
 
 ## Documents
 
-- [DESIGN.md](DESIGN.md): architecture, scoring methodology, where/how AI is used, tradeoffs, assumptions and scope.
+- [DESIGN.md](DESIGN.md): architecture, scoring methodology, key tradeoffs, where/how AI is used, assumptions and scope.
+- [docs/OVERVIEW.md](docs/OVERVIEW.md): plain-language overview of the same material for non-technical readers.
 - [docs/CLIENT_RUN_REPORT.md](docs/CLIENT_RUN_REPORT.md): findings from a client-side run as an investment manager
   (what worked, what is missing, what needs improvement).
 
