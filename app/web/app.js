@@ -210,6 +210,7 @@
   // ---------- side panel: top candidates (same engine as the chat), live status, data vintages, weights ----------
   const topBody = document.querySelector("#top-table tbody"), topScope = $("top-scope"), regionSel = $("top-region"), floorSel = $("top-floor");
   const fmtInt = (n) => (n == null ? "n/a" : Math.round(n).toLocaleString("en-US"));
+  const fmtCompact = (n) => (n == null ? "n/a" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(Math.round(n)));
 
   function loadRegions() {
     return api("/api/regions").then((d) => {
@@ -249,10 +250,9 @@
         tdName.appendChild(strong); tdName.appendChild(document.createTextNode(place + ", " + x.state));
         const tdScore = document.createElement("td"); tdScore.className = "score"; tdScore.textContent = x.score == null ? "n/a" : x.score.toFixed(1);
         const bar = document.createElement("span"); bar.className = "bar"; const fill = document.createElement("span"); fill.style.width = Math.max(0, Math.min(100, x.score || 0)) + "%"; bar.appendChild(fill); tdScore.appendChild(bar);
-        const tdConf = document.createElement("td"); const confPill = pill(x.confidence, x.confidence === "high" ? "pill-ok" : "pill-warn");
-        confPill.title = (x.data_gaps && x.data_gaps.length) ? "Missing inputs: " + x.data_gaps.join("; ") : "All inputs available for this airport";
-        tdConf.appendChild(confPill);
-        tr.appendChild(tdRank); tr.appendChild(tdName); tr.appendChild(tdScore); tr.appendChild(tdConf);
+        const tdSize = document.createElement("td"); tdSize.className = "size"; tdSize.textContent = fmtCompact(x.metrics && x.metrics.enplanements);
+        if (x.data_gaps && x.data_gaps.length) tr.title += " (scored on partial data: " + x.data_gaps.length + " input" + (x.data_gaps.length > 1 ? "s" : "") + " missing)";
+        tr.appendChild(tdRank); tr.appendChild(tdName); tr.appendChild(tdScore); tr.appendChild(tdSize);
         topBody.appendChild(tr);
       });
       const scopeLabel = (data.scope && data.scope.states && data.scope.states.length) ? data.scope.states.join(", ") : "United States";
