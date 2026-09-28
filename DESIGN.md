@@ -20,8 +20,8 @@ Follow-ups ("the second one", "add SFO", "what if I ignore scale?") are resolved
 ## 2. Architecture
 
 ```
-Browser chat UI (static HTML/JS, Web Speech API for voice in/out)
-   -> FastAPI  POST /api/chat   GET /api/health   GET /api/methodology     (127.0.0.1:8000)
+Browser UI: chat + analyst side panel (static HTML/JS, Web Speech API for voice in/out)
+   -> FastAPI  POST /api/chat   GET /api/rank  GET /api/live  GET /api/health  GET /api/methodology   (127.0.0.1:8000)
       -> Orchestrator: Session memory -> LLM adapter (claude_cli | anthropic) or rules router
            -> tools.dispatch(...)  8 deterministic tools, one result envelope
                -> kpi/  scoring, congestion, long_haul, demand, normalize   (pure functions on one metrics table)
@@ -40,6 +40,10 @@ Design rules:
   Join gaps are recorded and lower confidence instead of being silently dropped.
 - **Degrade, never fabricate.** Each source loads independently; a failed live fetch falls back to a stale cache or a
   committed snapshot with a note. Missing score components are dropped and weights renormalized; nothing is imputed.
+- **The side panel is the same engine.** The "top expansion candidates" table calls `GET /api/rank`, which dispatches
+  the identical `rank_airports` tool the chat uses, so a panel row and a chat answer for the same scope carry the same
+  score (tested). Scores do legitimately change with the scope (region filter, volume floor, weights) because the
+  percentile universe changes, so the panel always shows its scope next to the table.
 - **Three LLM adapters, one interface** (`complete(system, messages, tools) -> AssistantTurn`):
   `claude_cli` (headless Claude Code CLI, uses the machine's logged-in account, structured JSON output),
   `anthropic` (official SDK, native tool use, when `ANTHROPIC_API_KEY` is set), and `rules` (no LLM). The rules router

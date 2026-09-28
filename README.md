@@ -29,6 +29,8 @@ cp .env.example .env            # optional; see "LLM providers"
 Open http://127.0.0.1:8000. The first start fetches the FAA workbook (150 KB), the BTS delay-cause file (~1 MB) and
 the OurAirports tables (~17 MB) into `.cache/`; later starts take about two seconds.
 
+The page has two parts: the chat, and an analyst side panel with the top expansion candidates (switchable by region
+and volume floor; click a row to ask about that airport), live FAA airport status, data vintages and the score weights.
 Voice: the microphone button uses the browser's Web Speech API (Chrome) and the speaker button reads answers aloud.
 
 ## LLM providers
@@ -52,7 +54,10 @@ curl -s -X POST http://127.0.0.1:8000/api/chat -H 'Content-Type: application/jso
 ```
 
 `POST /api/chat` takes `{message, session_id?, provider?}` and returns `{text, mode, tool_results, sources, caveats,
-warnings, session_id}`. `GET /api/methodology` returns the scoring formulas; `GET /api/docs` is the OpenAPI UI.
+warnings, session_id}`. `GET /api/rank?region=&states=&min_enplanements=&limit=` returns the same deterministic
+ranking the chat uses (it powers the side panel, so panel and chat never disagree for the same scope);
+`GET /api/live` returns nationwide FAA NAS status; `GET /api/regions` lists region names; `GET /api/methodology`
+returns the scoring formulas; `GET /api/docs` is the OpenAPI UI.
 
 ## Tests and data refresh
 

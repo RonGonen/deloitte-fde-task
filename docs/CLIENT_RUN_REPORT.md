@@ -66,8 +66,9 @@ twice: LLM mode and rules-only mode. Transcripts: `docs/client_run_transcript.md
    network plans. Forecast growth today is only the FAA TAF.
 7. **Trend visuals and export**: no charts of the TAF history/forecast, no CSV/Excel export of a shortlist, no way to
    save or annotate a shortlist between sessions (sessions are in-memory, one hour).
-8. **Peer-set choice in the UI**: national percentiles are the right default but I could not ask for "vs New England
-   only" or "vs medium hubs" and see how the ranking changes.
+8. **Peer-set choice in the UI**: national percentiles are the right default but I could not ask for "vs medium hubs"
+   and see how the ranking changes. (Partly addressed after the run: the new side panel lets me switch region and
+   volume floor and shows the resulting universe size next to the table.)
 
 ## Needs improvement
 

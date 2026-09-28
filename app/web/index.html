@@ -22,6 +22,43 @@
   </header>
 
   <main class="layout">
+    <aside class="side" aria-label="Analyst workspace">
+      <section class="card" id="top-card">
+        <div class="card-head">
+          <h2>Top expansion candidates</h2>
+          <span class="pill pill-muted" id="top-scope">loading…</span>
+        </div>
+        <div class="controls">
+          <label>Region <select id="top-region"><option value="">United States</option></select></label>
+          <label>Min. enplanements <select id="top-floor">
+            <option value="100000">100k</option><option value="500000">500k</option><option value="1000000">1M</option><option value="5000000">5M</option>
+          </select></label>
+        </div>
+        <table class="top-table" id="top-table" aria-describedby="top-note">
+          <thead><tr><th>#</th><th>Airport</th><th>Score</th><th>Conf.</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="card-note" id="top-note">Same deterministic Expansion Opportunity Score the chat uses: national percentiles (0–100), weights growth 30 / momentum 20 / capacity pressure 30 / scale 20. Click a row to ask about that airport.</p>
+      </section>
+
+      <section class="card" id="live-card">
+        <div class="card-head"><h2>Live FAA airport status</h2><span class="pill pill-muted" id="live-time"></span></div>
+        <ul class="live-list" id="live-list"><li class="muted">loading…</li></ul>
+        <p class="card-note">Ground delay programs, ground stops and closures from the FAA NAS status feed. Shown for context; never used in scores.</p>
+      </section>
+
+      <section class="card" id="data-card">
+        <div class="card-head"><h2>Data vintages</h2></div>
+        <ul class="kv" id="data-list"><li class="muted">loading…</li></ul>
+      </section>
+
+      <section class="card" id="method-card">
+        <div class="card-head"><h2>How the score works</h2></div>
+        <div class="weights" id="weights"></div>
+        <p class="card-note">Forecast growth (FAA TAF 10-yr CAGR), recent momentum (FAA YoY + TAF), capacity pressure (ops per runway, slot status, forecast vs peak, delays and NAS share, cancellations) and scale (log enplanements). Ask “how is the expansion score calculated?” for the full method.</p>
+      </section>
+    </aside>
+
     <section class="chat" aria-label="Conversation">
       <div id="messages" class="messages" role="log" aria-live="polite"></div>
       <div class="chips" id="chips" aria-label="Suggested questions">

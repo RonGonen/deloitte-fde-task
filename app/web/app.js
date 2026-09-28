@@ -177,7 +177,117 @@
     const faa = h.sources && h.sources.faa_enplanements;
     const delay = h.sources && h.sources.bts_delay_cause;
     $("data-pill").textContent = [faa && faa.vintage ? "FAA " + faa.vintage : null, delay && delay.period ? "BTS " + delay.period : null, h.universe_size + " airports scored"].filter(Boolean).join(" · ");
+    renderDataCard(h);
   }).catch(() => { $("provider-pill").textContent = "server unavailable"; });
+
+  // ---------- side panel: top candidates (same engine as the chat), live status, data vintages, weights ----------
+  const topBody = document.querySelector("#top-table tbody"), topScope = $("top-scope"), regionSel = $("top-region"), floorSel = $("top-floor");
+  const fmtInt = (n) => (n == null ? "n/a" : Math.round(n).toLocaleString("en-US"));
+
+  function loadRegions() {
+    return fetch("/api/regions").then((r) => r.json()).then((d) => {
+      (d.regions || []).forEach((name) => {
+        const opt = document.createElement("option"); opt.value = name;
+        opt.textContent = name.replace(/\b\w/g, (c) => c.toUpperCase()); regionSel.appendChild(opt);
+      });
+    }).catch(() => {});
+  }
+
+  function loadTop() {
+    topScope.textContent = "loading…";
+    const params = new URLSearchParams({ min_enplanements: floorSel.value, limit: "10" });
+    if (regionSel.value) params.set("region", regionSel.value);
+    return fetch("/api/rank?" + params.toString()).then((r) => r.json()).then((d) => {
+      const data = d.data || {};
+      topBody.textContent = "";
+      if (!data.ranked || !data.ranked.length) {
+        const tr = document.createElement("tr"); const td = document.createElement("td"); td.colSpan = 4; td.className = "muted";
+        td.textContent = data.message || "No airports match this scope."; tr.appendChild(td); topBody.appendChild(tr);
+        topScope.textContent = "no results"; return;
+      }
+      data.ranked.forEach((x) => {
+        const tr = document.createElement("tr");
+        tr.title = "Ask the agent about " + (x.iata || x.lid);
+        tr.dataset.code = x.iata || x.lid;
+        const tdRank = document.createElement("td"); tdRank.textContent = x.rank;
+        const tdName = document.createElement("td");
+        const strong = document.createElement("strong"); strong.textContent = (x.iata || x.lid) + " ";
+        const place = (x.city || "").replace(/\s+(International|Intl|Regional|Municipal|Metropolitan)?\s*(Airport|Jetport|Field)\s*$/i, "").trim() || x.name;
+        tdName.appendChild(strong); tdName.appendChild(document.createTextNode(place + ", " + x.state));
+        const tdScore = document.createElement("td"); tdScore.className = "score"; tdScore.textContent = x.score == null ? "n/a" : x.score.toFixed(1);
+        const bar = document.createElement("span"); bar.className = "bar"; const fill = document.createElement("span"); fill.style.width = Math.max(0, Math.min(100, x.score || 0)) + "%"; bar.appendChild(fill); tdScore.appendChild(bar);
+        const tdConf = document.createElement("td"); tdConf.appendChild(pill(x.confidence, x.confidence === "high" ? "pill-ok" : "pill-warn"));
+        tr.appendChild(tdRank); tr.appendChild(tdName); tr.appendChild(tdScore); tr.appendChild(tdConf);
+        topBody.appendChild(tr);
+      });
+      const scopeLabel = (data.scope && data.scope.states && data.scope.states.length) ? data.scope.states.join(", ") : "United States";
+      topScope.textContent = scopeLabel + " · " + data.candidates_in_filter + " of " + data.universe_size + " airports ≥ " + fmtInt(data.min_enplanements);
+    }).catch(() => { topScope.textContent = "unavailable"; });
+  }
+  topBody.addEventListener("click", (e) => {
+    const row = e.target && e.target.closest("tr"); if (!row || !row.dataset.code) return;
+    inputEl.value = "Tell me about " + row.dataset.code + " and why it ranks where it does."; send();
+  });
+  regionSel.addEventListener("change", loadTop);
+  floorSel.addEventListener("change", loadTop);
+
+  function loadLive() {
+    fetch("/api/live").then((r) => r.json()).then((d) => {
+      const data = d.data || {}; const list = $("live-list"); list.textContent = "";
+      $("live-time").textContent = data.update_time ? "FAA " + data.update_time.replace(/^\w+\s/, "") : "";
+      const items = [];
+      Object.entries(data.by_type || {}).forEach(([type, arr]) => arr.forEach((ev) => items.push(Object.assign({}, ev, { type: type }))));
+      if (data.error) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "Live feed unavailable: " + data.error; list.appendChild(li); return; }
+      if (!items.length) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "No active ground delays, ground stops or closures nationwide."; list.appendChild(li); return; }
+      const order = { ground_stop: 0, closure: 1, ground_delay: 2, general_delay: 3 };
+      const rank = (t) => (order[t] === undefined ? 9 : order[t]);
+      items.sort((a, b) => rank(a.type) - rank(b.type)).slice(0, 12).forEach((ev) => {
+        const li = document.createElement("li");
+        const code = document.createElement("span"); code.className = "code"; code.textContent = ev.airport;
+        const type = document.createElement("span"); type.className = "type"; type.textContent = ev.type.replace(/_/g, " ");
+        li.appendChild(code); li.appendChild(type);
+        const detail = [ev.reason, ev.average ? "avg " + ev.average : null, ev.direction ? ev.direction.toLowerCase() : null].filter(Boolean).join(" · ");
+        if (detail) li.appendChild(document.createTextNode(" — " + detail));
+        list.appendChild(li);
+      });
+      if (items.length > 12) { const li = document.createElement("li"); li.className = "muted"; li.textContent = "+" + (items.length - 12) + " more airports with active events"; list.appendChild(li); }
+    }).catch(() => {});
+  }
+
+  function renderDataCard(h) {
+    const list = $("data-list"); list.textContent = "";
+    const src = h.sources || {};
+    const rows = [
+      ["FAA enplanements", src.faa_enplanements && src.faa_enplanements.vintage],
+      ["FAA TAF", src.taf && src.taf.period],
+      ["BTS delay causes", src.bts_delay_cause && src.bts_delay_cause.period],
+      ["BTS routes / taxi-out", src.bts_ontime && src.bts_ontime.period],
+      ["Airports & runways", src.ourairports && src.ourairports.vintage],
+      ["Scored universe", h.universe_size + " airports"],
+      ["Answer engine", h.provider === "rules" ? "rules-based" : h.model + " via " + h.provider],
+    ];
+    rows.forEach(([k, v]) => {
+      const li = document.createElement("li"); const kk = document.createElement("span"); kk.className = "k"; kk.textContent = k;
+      const vv = document.createElement("span"); vv.className = "v"; vv.textContent = v || "unavailable"; li.appendChild(kk); li.appendChild(vv); list.appendChild(li);
+    });
+  }
+
+  function renderWeights() {
+    const w = [["Forecast growth", 30], ["Demand momentum", 20], ["Capacity pressure", 30], ["Scale", 20]];
+    const box = $("weights"); box.textContent = "";
+    w.forEach(([label, pct]) => {
+      const row = document.createElement("div"); row.className = "w";
+      const l = document.createElement("span"); l.textContent = label;
+      const track = document.createElement("div"); track.className = "track"; const fill = document.createElement("div"); fill.className = "fill"; fill.style.width = pct + "%"; track.appendChild(fill);
+      const v = document.createElement("span"); v.textContent = pct + "%";
+      row.appendChild(l); row.appendChild(track); row.appendChild(v); box.appendChild(row);
+    });
+  }
+
+  loadRegions().then(loadTop);
+  loadLive();
+  renderWeights();
+  setInterval(loadLive, 5 * 60 * 1000);
 
   addMessage("assistant", "Hello. I screen US airports for modernization and expansion opportunities using FAA enplanement and forecast data, BTS delay statistics, runway and slot data. Ask a question or pick a suggestion below. I will always show my sources and what the data cannot tell you.", null);
 })();

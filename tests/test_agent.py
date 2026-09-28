@@ -226,3 +226,33 @@ def test_api_chat_rules_mode_and_validation(client):
 def test_index_is_served(client):
     response = client.get("/")
     assert response.status_code == 200 and "<html" in response.text.lower()
+
+
+# ------------------------------------------------------------ side-panel endpoints
+def test_api_rank_matches_the_chat_ranking_exactly(client):
+    """The side panel and the chat must never disagree: both call the same rank_airports tool."""
+    panel = client.get("/api/rank", params={"region": "new england", "min_enplanements": 100000, "limit": 10}).json()
+    chat = client.post("/api/chat", json={"message": "Which airports in New England are strong candidates for terminal expansion?", "provider": "rules"}).json()
+    chat_ranked = chat["tool_results"][0]["data"]["ranked"]
+    assert [(x["lid"], x["score"]) for x in panel["data"]["ranked"]] == [(x["lid"], x["score"]) for x in chat_ranked]
+    assert panel["data"]["scope"]["states"] == ["CT", "ME", "MA", "NH", "RI", "VT"]
+    assert panel["sources"] and panel["caveats"] and panel["confidence"]["level"] in {"high", "medium", "low"}
+
+
+def test_api_rank_validates_parameters(client):
+    assert client.get("/api/rank", params={"region": "narnia"}).status_code == 422
+    assert client.get("/api/rank", params={"states": "CA,not-a-code"}).status_code == 422
+    assert client.get("/api/rank", params={"limit": 0}).status_code == 422
+    assert client.get("/api/rank", params={"limit": 26}).status_code == 422
+    assert client.get("/api/rank", params={"min_enplanements": -1}).status_code == 422
+    ok = client.get("/api/rank", params={"states": "ca, tx", "limit": 5, "min_enplanements": 1000000}).json()
+    assert ok["data"]["scope"]["states"] == ["CA", "TX"] and len(ok["data"]["ranked"]) <= 5
+    assert all(x["metrics"]["enplanements"] >= 1000000 for x in ok["data"]["ranked"])
+
+
+def test_api_regions_and_live(client):
+    regions = client.get("/api/regions").json()
+    assert "new england" in regions["regions"] and regions["states"]["MA"] == "Massachusetts"
+    live = client.get("/api/live").json()
+    assert "by_type" in live["data"] and live["data"]["by_type"]["ground_delay"][0]["airport"] == "SFO"
+    assert live["sources"][0]["name"].startswith("FAA NAS")
