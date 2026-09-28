@@ -111,8 +111,9 @@ so this is pressure, not a passenger gap.
 - **Adapters** (`complete(system, messages, tools) -> AssistantTurn`): `claude_cli` (headless Claude Code CLI, the
   machine's logged-in account, structured JSON output via `--json-schema`, built-in tools disabled, list-form
   subprocess arguments); `anthropic` (official SDK, native tool use, `ANTHROPIC_API_KEY` from the shell environment);
-  `rules` (regex/word-list intents + deterministic narration). `LLM_PROVIDER=auto` picks in that order; the rules path
-  is also the automatic fallback on any LLM error. Default model `claude-fable-5-1` (`LLM_MODEL` overrides).
+  `rules` (regex/word-list intents + deterministic narration). `LLM_PROVIDER=auto` selects `anthropic` when a key is
+  present and otherwise `rules`; the CLI adapter is opt-in only, so a logged-in account is never used implicitly. The
+  rules path is also the automatic fallback on any LLM error. Default model `claude-fable-5-1` (`LLM_MODEL` overrides).
 - **Guardrails**: grounding check on every LLM answer; `mode` badge (llm/rules) and model on every response; session
   memory is server-side and per tool so follow-ups ("the second one", "add SFO", "ignore scale") resolve identically in
   both paths; input validated at the boundary (message length, UUID session id, provider enum).

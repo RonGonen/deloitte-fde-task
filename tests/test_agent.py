@@ -361,3 +361,14 @@ def test_profile_reports_national_and_state_rank_not_a_selection_rank(engine):
     assert es["national_rank"] == next(x["national_rank"] for x in national if x["lid"] == "HVN")
     bos = T.dispatch(engine, "airport_profile", {"code": "BOS"}, None)["data"]["expansion_score"]
     assert bos["rank_in_state"] == 1
+
+
+def test_auto_provider_never_picks_the_cli_implicitly(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "llm_provider", "auto")
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
+    assert settings.resolve_llm_provider() == "rules"
+    monkeypatch.setattr(settings, "anthropic_api_key", "k")
+    assert settings.resolve_llm_provider() == "anthropic"
+    monkeypatch.setattr(settings, "llm_provider", "claude_cli")
+    assert settings.resolve_llm_provider() == "claude_cli"

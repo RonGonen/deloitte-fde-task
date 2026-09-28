@@ -6,7 +6,6 @@ environment or a local, git-ignored .env file.
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -48,13 +47,15 @@ class Settings:
         self.http_timeout: float = float(os.getenv("HTTP_TIMEOUT", "90"))
 
     def resolve_llm_provider(self) -> str:
-        """Pick the concrete provider for LLM_PROVIDER=auto."""
+        """Pick the concrete provider for LLM_PROVIDER=auto.
+
+        The Claude Code CLI is never auto-selected: it would silently bill whatever account happens
+        to be logged in on the machine. It is used only when LLM_PROVIDER=claude_cli is set explicitly.
+        """
         if self.llm_provider != "auto":
             return self.llm_provider
         if self.anthropic_api_key:
             return "anthropic"
-        if shutil.which(self.claude_cli):
-            return "claude_cli"
         return "rules"
 
 

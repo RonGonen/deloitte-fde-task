@@ -47,8 +47,8 @@ Voice: the microphone button uses the browser's Web Speech API (Chrome) and the 
 
 | `LLM_PROVIDER` | What it uses | Needs |
 |---|---|---|
-| `auto` (default) | `anthropic` if `ANTHROPIC_API_KEY` is set, else `claude_cli` if the `claude` CLI is installed, else `rules` | - |
-| `claude_cli` | Headless Claude Code CLI (`claude -p`) with the account you are logged into | Claude Code installed and logged in |
+| `auto` (default) | `anthropic` if `ANTHROPIC_API_KEY` is set, else `rules`. A logged-in Claude CLI is never used implicitly | - |
+| `claude_cli` | Headless Claude Code CLI (`claude -p`) with the account you are logged into; opt-in only | Claude Code installed and logged in; set `LLM_PROVIDER=claude_cli` |
 | `anthropic` | Anthropic API via the official SDK, native tool use | `ANTHROPIC_API_KEY` exported in the shell environment (never stored in a file) |
 | `rules` | Deterministic rules-based interpreter and narrator, no LLM | nothing |
 

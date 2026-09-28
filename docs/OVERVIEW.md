@@ -165,9 +165,9 @@ sees the result bundles and describes them.
 
 **The model.** Claude Fable 5.1 by default, chosen for the quality of its reasoning about which analyses to combine
 (for example, answering "why is the first ranked above the second?" by pulling both airports' scores, both demand
-profiles and the methodology). It can run in two ways: through the Claude Code command-line login already on the
-machine, or through the Anthropic API with a key supplied in the shell environment. Without either, the app still works
-on the rules-based path.
+profiles and the methodology). It can run in two ways, both chosen explicitly in settings: through the Claude Code
+command-line login on the machine, or through the Anthropic API with a key supplied in the shell environment. Without
+either, the app runs on the rules-based path.
 
 ## 7. Key tradeoffs
 
