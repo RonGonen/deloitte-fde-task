@@ -8,7 +8,9 @@ CS = commercial service, GA, R = reliever) and hub size (L/M/S/N).
 from __future__ import annotations
 
 import io
+import logging
 import re
+import warnings
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -17,6 +19,7 @@ import pandas as pd
 from app.config import settings
 from app.sources.cache import Fetched, SourceUnavailable, fetch_bytes
 
+log = logging.getLogger(__name__)
 FAA_PAGE_URL = "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger"
 WORKBOOK_RE = re.compile(r'href="([^"]*arp-cy(\d{4})-all-enplanements(-preliminary)?\.xlsx)"', re.IGNORECASE)
 CY_COLUMN_RE = re.compile(r"^CY\s*(\d{2,4})\s*Enplanements$", re.IGNORECASE)
@@ -62,7 +65,9 @@ def _year_from_header(header: str) -> int:
 
 
 def parse_workbook(content: bytes, source_url: str = "", retrieved_at: str = "", from_cache: bool = False) -> FaaEnplanements:
-    raw = pd.read_excel(io.BytesIO(content), header=None)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Cannot parse header or footer", category=UserWarning)  # cosmetic openpyxl notice
+        raw = pd.read_excel(io.BytesIO(content), header=None)
     header_idx = None
     for idx, row in raw.iterrows():
         values = [str(v).strip() for v in row.tolist()]
@@ -131,5 +136,6 @@ def load_faa_enplanements(ttl_seconds: float = 24 * 3600) -> FaaEnplanements:
             "snapshot",
             True,
         )
-        result.notes.append(f"Using committed FAA snapshot; live fetch failed: {exc}")
+        log.warning("FAA enplanement live fetch failed, using committed copy: %s", exc)
+        result.notes.append("Live FAA download was unavailable; using the committed CY2025 preliminary workbook.")
         return result

@@ -8,6 +8,7 @@ a +13 rotation over the 62-character alphabet [0-9A-Za-z]. The month key is
 from __future__ import annotations
 
 import io
+import logging
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date
@@ -18,6 +19,7 @@ import pandas as pd
 from app.config import settings
 from app.sources.cache import SourceUnavailable, fetch_bytes
 
+log = logging.getLogger(__name__)
 PAGE_URL = "https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp"
 DOWNLOAD_URL = "https://www.transtats.bts.gov/ot_delay/ot_delaycause1_DL.aspx"
 ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -121,9 +123,10 @@ def load_delay_cause(months: int = 12, ttl_seconds: float = 24 * 3600, today: Op
     except (SourceUnavailable, ValueError, zipfile.BadZipFile) as exc:
         if not snapshot.exists():
             raise SourceUnavailable(f"BTS delay cause unavailable and no snapshot: {exc}")
+        log.warning("BTS delay-cause live fetch failed, using committed snapshot: %s", exc)
         frame = pd.read_csv(snapshot)
         ordered = frame.sort_values(["year", "month"])
         first, last = ordered.iloc[0], ordered.iloc[-1]
         result = DelayCause(frame, (int(first.year), int(first.month)), (int(last.year), int(last.month)), "snapshot", True)
-        result.notes.append(f"Using committed BTS delay-cause snapshot; live fetch failed: {exc}")
+        result.notes.append("Live BTS download was unavailable; using the committed delay-cause snapshot (same 12-month window).")
         return result
