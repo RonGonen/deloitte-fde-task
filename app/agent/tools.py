@@ -183,8 +183,9 @@ def rank_airports(engine: Engine, args: Dict[str, Any], session: Optional[Sessio
     if result.get("excluded_below_floor"):
         caveats.append(f"Not scored because they are below the {min_enpl:,.0f}-enplanement floor of the percentile universe: "
                        f"{', '.join(result['excluded_below_floor'])}. Lower min_enplanements to include them.")
-    if any(x["missing_components"] for x in ranked):
-        caveats.append("Some airports lack BTS delay coverage (fewer than 2,000 reporting-carrier arrivals); their capacity-pressure score uses structural signals only and confidence is lowered.")
+    if any(x.get("data_gaps") or x["missing_components"] for x in ranked):
+        caveats.append("Confidence is 'medium' or 'low' where inputs were missing (most often BTS delay coverage for smaller airports, which "
+                       "have fewer than 2,000 airline-reported arrivals); those scores use the remaining inputs with weights rebalanced, nothing is estimated.")
     caveats += source_caveats(engine, ["faa", "taf", "delay", "ourairports"])
     scope = {"states": states, "codes": codes, "min_enplanements": min_enpl}
     if session is not None:

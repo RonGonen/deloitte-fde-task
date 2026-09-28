@@ -89,7 +89,7 @@ def _score_universe(table: pd.DataFrame, min_enplanements: float, weights: Dict[
     cache = table.attrs.setdefault("_expansion_score_cache", {})
     if key in cache:
         rows, size = cache[key]
-        return [dict(r, sub_scores=dict(r["sub_scores"]), metrics=dict(r["metrics"])) for r in rows], size
+        return [dict(r, sub_scores=dict(r["sub_scores"]), metrics=dict(r["metrics"]), data_gaps=list(r["data_gaps"])) for r in rows], size
     universe = table[table["enplanements"] >= min_enplanements].copy()
     if universe.empty:
         cache[key] = ([], 0)
@@ -103,6 +103,14 @@ def _score_universe(table: pd.DataFrame, min_enplanements: float, weights: Dict[
         missing = list(result["missing"])
         gaps = int(r["join_gaps"]) if not pd.isna(r["join_gaps"]) else 0
         has_delay = bool(r["has_delay"])
+        # Partial inputs lower confidence even when the component itself could still be computed.
+        data_gaps: List[str] = []
+        if not has_delay:
+            data_gaps.append("no BTS delay coverage (fewer than 2,000 airline-reported arrivals); capacity pressure uses structural signals only")
+        if not bool(r["has_runways"]):
+            data_gaps.append("runway count unavailable")
+        if not bool(r["has_taf"]):
+            data_gaps.append("no FAA TAF record (forecast and operations unavailable)")
         rows.append({
             "lid": r["lid"], "iata": r["iata"], "name": r["name"], "city": r["city"], "state": r["state"], "hub": r["hub"],
             "score": result["score"], "score_without_scale": no_scale["score"],
@@ -111,8 +119,9 @@ def _score_universe(table: pd.DataFrame, min_enplanements: float, weights: Dict[
             "observed_pressure": _clean(comp.at[idx, "observed_pressure"]),
             "weights_used": result["weights_used"],
             "drivers": _drivers(subs, result["weights_used"]),
-            "confidence": confidence_level(missing, ["join gap"] * gaps, len(DEFAULT_WEIGHTS)),
+            "confidence": confidence_level(missing + data_gaps, ["join gap"] * gaps, len(DEFAULT_WEIGHTS)),
             "missing_components": missing,
+            "data_gaps": data_gaps,
             "metrics": {
                 "enplanements": _clean(r["enplanements"]), "yoy_pct": _clean(r["yoy_pct"]),
                 "taf_growth_last_actual_pct": _clean(r["taf_growth_last_actual_pct"]), "forecast_cagr_pct": _clean(r["forecast_cagr_pct"]),
@@ -129,7 +138,7 @@ def _score_universe(table: pd.DataFrame, min_enplanements: float, weights: Dict[
     if len(cache) >= 32:
         cache.clear()
     cache[key] = (rows, int(len(universe)))
-    return [dict(r, sub_scores=dict(r["sub_scores"]), metrics=dict(r["metrics"])) for r in rows], int(len(universe))
+    return [dict(r, sub_scores=dict(r["sub_scores"]), metrics=dict(r["metrics"]), data_gaps=list(r["data_gaps"])) for r in rows], int(len(universe))
 
 
 def expansion_scores(

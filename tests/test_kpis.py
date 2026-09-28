@@ -52,6 +52,9 @@ def test_expansion_scores_handle_missing_delay_data_by_renormalizing(table):
     assert small, "fixture should include an airport without BTS delay coverage"
     assert all(x["score"] is not None for x in small)
     assert all(x["sub_scores"]["capacity_pressure"] is not None for x in small)  # structural half still available
+    assert all(x["confidence"] != "high" and any("delay" in g for g in x["data_gaps"]) for x in small)  # but confidence drops
+    full = [x for x in ranked if x["metrics"]["del15_pct"] is not None and not x["data_gaps"]]
+    assert full and all(x["confidence"] == "high" for x in full)
 
 
 def test_expansion_scores_custom_weights_and_code_filter(table):

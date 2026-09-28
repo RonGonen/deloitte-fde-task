@@ -241,7 +241,9 @@
         tdName.appendChild(strong); tdName.appendChild(document.createTextNode(place + ", " + x.state));
         const tdScore = document.createElement("td"); tdScore.className = "score"; tdScore.textContent = x.score == null ? "n/a" : x.score.toFixed(1);
         const bar = document.createElement("span"); bar.className = "bar"; const fill = document.createElement("span"); fill.style.width = Math.max(0, Math.min(100, x.score || 0)) + "%"; bar.appendChild(fill); tdScore.appendChild(bar);
-        const tdConf = document.createElement("td"); tdConf.appendChild(pill(x.confidence, x.confidence === "high" ? "pill-ok" : "pill-warn"));
+        const tdConf = document.createElement("td"); const confPill = pill(x.confidence, x.confidence === "high" ? "pill-ok" : "pill-warn");
+        confPill.title = (x.data_gaps && x.data_gaps.length) ? "Missing inputs: " + x.data_gaps.join("; ") : "All inputs available for this airport";
+        tdConf.appendChild(confPill);
         tr.appendChild(tdRank); tr.appendChild(tdName); tr.appendChild(tdScore); tr.appendChild(tdConf);
         topBody.appendChild(tr);
       });
